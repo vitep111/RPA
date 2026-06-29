@@ -8,10 +8,7 @@ fi
 
 echo "Session start hook running..."
 
-# --- Add dependency installation here as the project grows ---
-# Examples:
-#   pip install -r requirements.txt
-#   npm install
-#   poetry install
+# Restore skills from skills-lock.json
+npx skills@latest experimental_install -y
 
 echo "Session start hook complete."
