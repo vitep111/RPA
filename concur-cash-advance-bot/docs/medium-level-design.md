@@ -43,9 +43,9 @@ Prepare everything the run needs before touching Concur: load settings and crede
 - Browser fails to launch or the login page doesn't load → **retry up to `MaxRetry`**, then **fatal abort** with a logged error.
 - All failures here go down the Phase 5 "Abort and Log Fatal Error" path — we never proceed to login with a broken setup.
 
-### Open Questions (to confirm before Phase 4)
-1. **Credential storage:** admin password held as a PA Desktop sensitive variable, or read from Windows Credential Manager / a protected file?
-2. **Log file style:** one new timestamped file per run, or a single rolling daily file that every run appends to? (A rolling daily file may suit the later daily-email summary better.)
+### Decisions (confirmed)
+1. **Credential storage:** external credential file (path stored in config; file read at startup, never logged).
+2. **Log file style:** rolling daily file — one file per calendar day, each hourly run appends rows to it. File named e.g. `ConcurLog_20260630.xlsx`. Suits the daily email summary phase.
 
 ### Internal Flow
 
@@ -67,7 +67,47 @@ graph TD
 ---
 
 ## Phase 2 of 6: Login to Concur
-*Pending confirmation of Phase 1.*
+
+### Purpose & Scope
+Authenticate the admin account in the browser and land on the Concur home/dashboard. A failed login is fatal — the bot cannot impersonate any user if it isn't logged in. Retries cover transient page-load issues; a true credential failure should abort immediately (no point retrying bad credentials).
+
+### Key Steps (logical)
+1. **Navigate to login page** — go to `ConcurBaseUrl` if not already there.
+2. **Enter credentials** — type `AdminUser` into the username field; read the password from the external credential file and type into the password field.
+3. **Click Sign In** — submit the login form.
+4. **Verify login success** — wait for the home/dashboard element to appear (e.g., the top navigation or user avatar). If it doesn't appear within `TimeoutSeconds`, treat as login failure.
+5. **Confirm no MFA/SSO redirect** — if an unexpected page appears (not the dashboard), abort with a descriptive error.
+
+### Variables introduced
+| Variable | Type | Notes |
+|---|---|---|
+| `AdminPassword` | Text (sensitive) | Read from external credential file; never logged |
+| `LoginSuccess` | Boolean | Set `true` once dashboard confirmed |
+
+### Error Handling
+- Credential file not found or unreadable → **fatal abort** (logged).
+- Username/password field not found (page didn't load) → **retry up to `MaxRetry`**, then fatal abort.
+- Dashboard element never appears after submit → **retry login sequence**, then fatal abort. Do not retry indefinitely on a bad password.
+- Unexpected redirect (MFA, SSO, error page) → **fatal abort** with page URL logged so it's diagnosable.
+
+### Internal Flow
+
+```mermaid
+graph TD
+    A[Phase 2 Start] --> B[Read Password from Credential File]
+    B --> C{File readable?}
+    C -->|No| FATAL[Log Fatal Error - Abort Run]
+    C -->|Yes| D[Navigate to Login Page]
+    D --> E[Enter Username and Password]
+    E --> F[Click Sign In]
+    F --> G{Dashboard appeared?}
+    G -->|No| H{Retries left?}
+    H -->|Yes| D
+    H -->|No| FATAL
+    G -->|Yes| I{Expected page - no MFA redirect?}
+    I -->|No| FATAL
+    I -->|Yes| J[Phase 2 complete — proceed to Get Pending Report]
+```
 
 ## Phase 3 of 6: Get Pending Report
 *Pending confirmation of Phase 2.*
