@@ -133,6 +133,12 @@
       "skillPath": "skills/in-progress/review/SKILL.md",
       "computedHash": "8f98a68bf07ef9b80d5302d863efe896fbf7beb488f01904ad65c76fac394e82"
     },
+    "rpa-bot-dev": {
+      "source": "vitep111/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/rpa-bot-dev/SKILL.md",
+      "computedHash": "ec7ba39c50d7ae7f3c38d083a6b4123aabc6c4c30729786a8b2d532a2c338403"
+    },
     "scaffold-exercises": {
       "source": "vitep111/skills",
       "sourceType": "github",

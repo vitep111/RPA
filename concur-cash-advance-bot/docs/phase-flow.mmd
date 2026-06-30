@@ -1,0 +1,24 @@
+graph TD
+    A[Phase 1: Initialize and Load Settings] --> B[Phase 2: Login to Concur]
+    B --> C{Login successful?}
+    C -->|No| X[Phase 5: Abort and Log Fatal Error]
+    C -->|Yes| D[Phase 3: Get Pending Report]
+    D --> E{Any pending items?}
+    E -->|No| H[Phase 6: Cleanup and Reporting]
+    E -->|Yes| F[Phase 4: Process Pending Requests Loop]
+
+    subgraph Loop [For each pending request]
+        F --> F1{Act as user OK?}
+        F1 -->|No| L1[Log Skip] --> FN[Next item]
+        F1 -->|Yes| F2{Pending block found?}
+        F2 -->|No| L2[Log Skip] --> FN
+        F2 -->|Yes| F3[Click Submit]
+        F3 --> F4{Submit registered?}
+        F4 -->|No| L3[Log Failure] --> FN
+        F4 -->|Yes| L4[Log Success] --> FN
+        FN --> F
+    end
+
+    F --> H
+    X --> H
+    H --> Z[End]
