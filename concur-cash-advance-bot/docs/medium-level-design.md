@@ -73,10 +73,12 @@ Authenticate the admin account in the browser and land on the Concur home/dashbo
 
 ### Key Steps (logical)
 1. **Navigate to login page** — go to `ConcurBaseUrl` if not already there.
-2. **Enter credentials** — type `AdminUser` into the username field; read the password from the external credential file and type into the password field.
-3. **Click Sign In** — submit the login form.
-4. **Verify login success** — wait for the home/dashboard element to appear (e.g., the top navigation or user avatar). If it doesn't appear within `TimeoutSeconds`, treat as login failure.
-5. **Confirm no MFA/SSO redirect** — if an unexpected page appears (not the dashboard), abort with a descriptive error.
+2. **Enter username** — type `AdminUser` into the username field and click Next (or press Enter) to proceed to page 2.
+3. **Wait for password page** — confirm the password field appears before typing.
+4. **Enter password** — read the password from the external credential file and type into the password field.
+5. **Click Sign In** — submit the password form.
+6. **Verify login success** — wait for the home/dashboard element to appear (e.g., the top navigation or user avatar). If it doesn't appear within `TimeoutSeconds`, treat as login failure.
+7. **Confirm no MFA/SSO redirect** — if an unexpected page appears (not the dashboard), abort with a descriptive error.
 
 ### Variables introduced
 | Variable | Type | Notes |
@@ -98,15 +100,19 @@ graph TD
     B --> C{File readable?}
     C -->|No| FATAL[Log Fatal Error - Abort Run]
     C -->|Yes| D[Navigate to Login Page]
-    D --> E[Enter Username and Password]
-    E --> F[Click Sign In]
-    F --> G{Dashboard appeared?}
-    G -->|No| H{Retries left?}
+    D --> E[Enter Username - Click Next]
+    E --> F{Password page appeared?}
+    F -->|No| H{Retries left?}
     H -->|Yes| D
     H -->|No| FATAL
-    G -->|Yes| I{Expected page - no MFA redirect?}
-    I -->|No| FATAL
-    I -->|Yes| J[Phase 2 complete — proceed to Get Pending Report]
+    F -->|Yes| G[Enter Password - Click Sign In]
+    G --> I{Dashboard appeared?}
+    I -->|No| H2{Retries left?}
+    H2 -->|Yes| D
+    H2 -->|No| FATAL
+    I -->|Yes| K{Expected page - no MFA redirect?}
+    K -->|No| FATAL
+    K -->|Yes| J[Phase 2 complete — proceed to Get Pending Report]
 ```
 
 ## Phase 3 of 6: Get Pending Report
