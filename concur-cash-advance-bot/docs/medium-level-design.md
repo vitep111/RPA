@@ -116,7 +116,52 @@ graph TD
 ```
 
 ## Phase 3 of 6: Get Pending Report
-*Pending confirmation of Phase 2.*
+
+### Purpose & Scope
+Navigate to the admin grid of pending Cash Advance Requests, export it to Excel, read the exported file into a list the loop will iterate over, and decide whether there is any work to do. If the list is empty, the bot exits cleanly without touching any user account.
+
+### Key Steps (logical)
+1. **Navigate to the admin pending grid** — go to the Cash Advance Requests section and ensure the view is filtered to pending submission status only.
+2. **Trigger the Excel export** — click the export button, wait for the browser download to complete and the file to appear in `ExportFolderPath`.
+3. **Verify the export file exists** — confirm the file landed within `TimeoutSeconds`; if not, retry or abort.
+4. **Read the export into a list** — open the Excel file and load all data rows into `PendingList` (one record per pending request). Each record carries at minimum: User ID, Request ID/Name.
+5. **Check for empty list** — if `PendingCount = 0`, log "No pending items — run complete" and jump directly to Phase 6 (Cleanup), skipping the loop entirely.
+6. **Delete or archive the export file** — remove the downloaded export so it doesn't accumulate or interfere with the next run.
+
+### Variables introduced
+| Variable | Type | Notes |
+|---|---|---|
+| `ExportFilePath` | Text | Full path to the downloaded export file |
+| `PendingList` | List of records | One entry per pending request (User ID, Request ID/Name) |
+| `PendingCount` | Number | Row count of `PendingList`; 0 triggers early exit |
+| `CurrentIndex` | Number | Loop counter — initialized here to 0, used in Phase 4 |
+
+### Error Handling
+- Admin grid page fails to load → **retry up to `MaxRetry`**, then fatal abort.
+- Export button not found or download times out → **retry**, then fatal abort.
+- Export file unreadable or has no header row → **fatal abort** with file path logged.
+- Empty list (`PendingCount = 0`) → **clean exit** (not an error): log "nothing to process" and proceed to Phase 6.
+
+### Internal Flow
+
+```mermaid
+graph TD
+    A[Phase 3 Start] --> B[Navigate to Admin Pending Grid]
+    B --> C{Grid loaded?}
+    C -->|No| R1{Retries left?}
+    R1 -->|Yes| B
+    R1 -->|No| FATAL[Log Fatal Error - Abort Run]
+    C -->|Yes| D[Click Export to Excel]
+    D --> E{File downloaded?}
+    E -->|No| R2{Retries left?}
+    R2 -->|Yes| D
+    R2 -->|No| FATAL
+    E -->|Yes| F[Read Export into PendingList]
+    F --> G{PendingCount = 0?}
+    G -->|Yes| H[Log - No Pending Items] --> SKIP[Jump to Phase 6 Cleanup]
+    G -->|No| I[Delete Export File]
+    I --> J[Phase 3 complete — proceed to Process Loop]
+```
 
 ## Phase 4 of 6: Process Pending Requests (Loop)
 *Pending confirmation of Phase 3.*
