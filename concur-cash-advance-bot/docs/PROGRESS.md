@@ -11,13 +11,17 @@
 - Design is kept **portable**: clear logical phases, self-contained loop body with per-item error isolation, a distinct "config" variable group, and Verb+Object naming — so a switch to UiPath is low-friction.
 
 ## Current phase
-**Phase 2: High-Level Design — proposed, awaiting user confirmation.**
-Six phases + Mermaid flow saved in `high-level-design.md` and `phase-flow.mmd`.
-Next once confirmed: **Phase 3 — Medium-Level Design** (internals of each phase, one at a time).
+**Phase 3: Medium-Level Design — in progress.**
+Phase 1 of 6 (Initialize & Load Settings) designed and saved in `medium-level-design.md`. Awaiting user confirmation before moving to Phase 2 of 6 (Login to Concur).
+
+Two open questions to resolve before Phase 4:
+1. Credential storage: sensitive variable in PA Desktop, or Windows Credential Manager?
+2. Log file style: timestamped file per run, or rolling daily file?
 
 ## Phase status
 - [x] Phase 1 — Discovery (PDD confirmed)
-- [~] Phase 2 — High-Level Design (proposed, awaiting confirmation)
+- [x] Phase 2 — High-Level Design (confirmed)
+- [~] Phase 3 — Medium-Level Design (Phase 1/6 proposed, awaiting confirmation)
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design
 - [ ] Phase 5 — Full Design Review & sign-off
