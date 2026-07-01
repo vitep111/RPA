@@ -21,7 +21,13 @@ Two open questions to resolve before Phase 4:
 ## Phase status
 - [x] Phase 1 — Discovery (PDD confirmed)
 - [x] Phase 2 — High-Level Design (confirmed)
-- [~] Phase 3 — Medium-Level Design (Phase 1/6 proposed, awaiting confirmation)
+- [~] Phase 3 — Medium-Level Design (in progress)
+  - [x] Phase 1/6 — Initialize & Load Settings (confirmed)
+  - [!] Phase 2/6 — Login to Concur (BLOCKED — login method pending IT decision: SSO Windows Integrated Auth vs magic link)
+  - [x] Phase 3/6 — Get Pending Report (confirmed)
+  - [~] Phase 4/6 — Process Pending Requests Loop (proposed, awaiting confirmation)
+  - [ ] Phase 5/6 — Exception Handling
+  - [ ] Phase 6/6 — Cleanup & Reporting
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design
 - [ ] Phase 5 — Full Design Review & sign-off

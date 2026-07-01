@@ -68,6 +68,9 @@ graph TD
 
 ## Phase 2 of 6: Login to Concur
 
+> ⚠️ **BLOCKED — pending login method decision.**
+> Password login requires 2FA. Two options under investigation: (1) SSO with Windows Integrated Auth (preferred — silent, no extra steps); (2) magic link via email (automatable but fragile). Needs IT/Azure AD confirmation before this phase can be finalised. Design continues on other phases in the meantime.
+
 ### Purpose & Scope
 Authenticate the admin account in the browser and land on the Concur home/dashboard. A failed login is fatal — the bot cannot impersonate any user if it isn't logged in. Retries cover transient page-load issues; a true credential failure should abort immediately (no point retrying bad credentials).
 
@@ -164,7 +167,87 @@ graph TD
 ```
 
 ## Phase 4 of 6: Process Pending Requests (Loop)
-*Pending confirmation of Phase 3.*
+
+### Purpose & Scope
+Iterate over every row in `PendingList` and, for each one: impersonate the user via "Act as", navigate to their Cash Advances screen, locate the pending block, open it, and click Submit. Each item is fully isolated — one failure logs and skips to the next, never killing the whole run. At the end of each item the bot clears "Act as" and returns to admin context before processing the next.
+
+### Key Steps (logical — per iteration)
+
+**A. Switch to user context**
+1. Locate the "Act as" field (top-right of Concur).
+2. Clear any existing "Act as" value.
+3. Type the User ID from the current row and confirm/select the user.
+4. Verify the page reflects the correct user (name shown in "Act as" badge).
+
+**B. Navigate to Cash Advances**
+5. Navigate to the Cash Advances screen for the impersonated user.
+6. Wait for the card grid to load.
+
+**C. Locate the pending block**
+7. Scan the card grid for a block matching the Request ID/Name from the current row **and** in pending submission status.
+8. If not found → log "Block not found / Skipped" and jump to step E (clear context).
+
+**D. Submit**
+9. Click the matching pending block to open it.
+10. Wait for the request detail page to load.
+11. Click the **Submit** button.
+12. Verify submit registered — confirm the Submit button disappears or the status changes away from pending. If neither happens within `TimeoutSeconds` → log "Submit failed" and jump to step E.
+13. Log "Submitted successfully" with User ID, Request ID, and timestamp.
+
+**E. Clear user context**
+14. Clear the "Act as" field and confirm the page returns to admin context before moving to the next row.
+
+### Variables introduced
+| Variable | Type | Notes |
+|---|---|---|
+| `CurrentRecord` | Record | The current row from `PendingList` (User ID, Request ID/Name) |
+| `CurrentUserID` | Text | User ID from current row |
+| `CurrentRequestID` | Text | Request ID/Name from current row |
+| `ItemOutcome` | Text | "Submitted" / "Skipped" / "Failed" for this item |
+| `ItemReason` | Text | Detail written to log (e.g., "Block not found", "Submit timeout") |
+| `SubmitConfirmed` | Boolean | True when submit success is verified |
+
+### Error Handling (per-item isolation)
+Every step inside the loop runs inside an error-handling block. Any unexpected error:
+- Sets `ItemOutcome = "Failed"` and `ItemReason = error detail`
+- Attempts to clear "Act as" (best-effort — to avoid contaminating the next iteration)
+- Logs the outcome
+- Moves to the next row
+
+Specific cases:
+| Scenario | Action |
+|---|---|
+| "Act as" switch fails (user not found / field error) | Log "Skip — Act as failed", clear context, next item |
+| Cash Advances page fails to load | Retry up to `MaxRetry`, then log "Skip — page load failed" |
+| Pending block not found on screen | Log "Skip — block not found", clear context, next item |
+| Submit button not found on detail page | Log "Skip — submit button not found", clear context, next item |
+| Submit click succeeds but status doesn't change | Log "Failed — submit not confirmed", clear context, next item |
+| Any unhandled error mid-item | Log "Failed — unexpected error + detail", clear context, next item |
+
+### Internal Flow (single iteration)
+
+```mermaid
+graph TD
+    A[Next item from PendingList] --> B[Clear Act-as field]
+    B --> C[Type User ID - Confirm user]
+    C --> D{Act-as confirmed?}
+    D -->|No| SKIP1[Log Skip - Act-as failed] --> CLR[Clear Act-as] --> NEXT[Next item]
+    D -->|Yes| E[Navigate to Cash Advances screen]
+    E --> F{Page loaded?}
+    F -->|No| R1{Retries left?}
+    R1 -->|Yes| E
+    R1 -->|No| SKIP2[Log Skip - Page load failed] --> CLR
+    F -->|Yes| G[Find pending block matching Request ID]
+    G --> H{Block found?}
+    H -->|No| SKIP3[Log Skip - Block not found] --> CLR
+    H -->|Yes| I[Click block - Open detail page]
+    I --> J[Click Submit button]
+    J --> K{Submit confirmed?}
+    K -->|No| FAIL[Log Failed - Submit not confirmed] --> CLR
+    K -->|Yes| SUCCESS[Log Submitted Successfully] --> CLR
+    CLR --> NEXT
+    NEXT --> A
+```
 
 ## Phase 5 of 6: Exception Handling
 *Pending confirmation of Phase 4.*
