@@ -184,7 +184,7 @@ Iterate over every row in `PendingList` and, for each one: impersonate the user 
 6. Wait for the card grid to load.
 
 **C. Locate the pending block**
-7. Scan the card grid for a block matching the Request ID/Name from the current row **and** in pending submission status.
+7. Scan the card grid for a block matching the Request ID/Name from the current row **and** in pending submission status. Request ID/Name is visible on the card face — no need to click in first.
 8. If not found → log "Block not found / Skipped" and jump to step E (clear context).
 
 **D. Submit**
@@ -195,7 +195,7 @@ Iterate over every row in `PendingList` and, for each one: impersonate the user 
 13. Log "Submitted successfully" with User ID, Request ID, and timestamp.
 
 **E. Clear user context**
-14. Clear the "Act as" field and confirm the page returns to admin context before moving to the next row.
+14. Click the dedicated "back to admin / stop acting as" button. Wait for confirmation that the page has returned to admin context (admin name shown in the top-right, not the impersonated user) before moving to the next row.
 
 ### Variables introduced
 | Variable | Type | Notes |
