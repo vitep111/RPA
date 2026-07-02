@@ -11,23 +11,28 @@
 - Design is kept **portable**: clear logical phases, self-contained loop body with per-item error isolation, a distinct "config" variable group, and Verb+Object naming — so a switch to UiPath is low-friction.
 
 ## Current phase
-**Phase 3: Medium-Level Design — in progress.**
-Phase 1 of 6 (Initialize & Load Settings) designed and saved in `medium-level-design.md`. Awaiting user confirmation before moving to Phase 2 of 6 (Login to Concur).
+**Phase 4: Detailed Design — in progress.**
+Phase 1/6 (Initialize & Load Settings) detailed design saved in `detailed-design.md`. Awaiting user confirmation before moving to Phase 3/6's detailed design (Phase 2/6 Login remains blocked, skipped for now).
 
-Two open questions to resolve before Phase 4:
-1. Credential storage: sensitive variable in PA Desktop, or Windows Credential Manager?
-2. Log file style: timestamped file per run, or rolling daily file?
+## Login blocker (still open)
+Password login is out (requires 2FA). Deciding between:
+1. SSO with Windows Integrated Auth (preferred — silent, no extra steps) — needs IT/Azure AD confirmation.
+2. Magic link via email — automatable but fragile (inbox access, delivery delay, spam risk).
+Phase 2/6 detailed design is deferred until this is resolved. All other phases are designed independently of the login mechanism.
 
 ## Phase status
 - [x] Phase 1 — Discovery (PDD confirmed)
 - [x] Phase 2 — High-Level Design (confirmed)
-- [~] Phase 3 — Medium-Level Design (in progress)
-  - [x] Phase 1/6 — Initialize & Load Settings (confirmed)
-  - [!] Phase 2/6 — Login to Concur (BLOCKED — login method pending IT decision: SSO Windows Integrated Auth vs magic link)
-  - [x] Phase 3/6 — Get Pending Report (confirmed)
-  - [x] Phase 4/6 — Process Pending Requests Loop (confirmed)
-  - [x] Phase 5/6 — Exception Handling (confirmed)
-  - [~] Phase 6/6 — Cleanup & Reporting (proposed, awaiting confirmation)
+- [x] Phase 3 — Medium-Level Design (complete, all 6 sub-phases; Phase 2/6 flagged blocked)
+- [~] Phase 4 — Detailed Design (in progress)
+  - [~] Phase 1/6 — Initialize & Load Settings (proposed, awaiting confirmation)
+  - [!] Phase 2/6 — Login to Concur (BLOCKED — deferred until login method decided)
+  - [ ] Phase 3/6 — Get Pending Report
+  - [ ] Phase 4/6 — Process Pending Requests Loop
+  - [ ] Phase 5/6 — Exception Handling
+  - [ ] Phase 6/6 — Cleanup & Reporting
+- [ ] Phase 5 — Full Design Review & sign-off
+- [ ] Phase 6 — Implementation Guide
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design
 - [ ] Phase 5 — Full Design Review & sign-off
