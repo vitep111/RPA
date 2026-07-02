@@ -323,4 +323,49 @@ graph TD
 ```
 
 ## Phase 6 of 6: Cleanup & Reporting
-*Pending confirmation of Phase 5.*
+
+### Purpose & Scope
+Bring the run to a clean, predictable close regardless of how it got here — whether every item processed normally, the list was empty, or a fatal error aborted the run early. Ensures the browser and any open resources are always released, and writes a final run-summary row so each run is easy to audit at a glance.
+
+### Key Steps (logical)
+1. **Compute run summary** — tally counts from this run's log rows: `SubmittedCount`, `SkippedCount`, `FailedCount`, and total processed.
+2. **Write summary row** — append one summary row to the rolling daily log (Outcome = "Run Summary"), distinct from the per-item rows, so the daily email (future phase) can report totals without recomputing them.
+3. **Close the browser** — close all tabs/windows and end the browser process cleanly, even if it's already in an error state.
+4. **Final log flush** — ensure the Excel file is saved and properly closed (no lock file left behind) so the next hourly run and the future daily-email process can both read it.
+5. **End run** — normal completion for both the happy path and the "no pending items" early-exit path from Phase 3.
+
+### Variables introduced
+| Variable | Type | Notes |
+|---|---|---|
+| `SubmittedCount` | Number | Count of "Submitted" outcomes this run |
+| `SkippedCount` | Number | Count of "Skipped" outcomes this run |
+| `FailedCount` | Number | Count of "Failed" outcomes this run |
+| `RunEndTimestamp` | Text | Time the run finished, written to the summary row |
+
+### Error Handling
+- This phase is the terminal point for **every** path (happy path, empty-list early exit, and fatal abort) — it must not itself introduce a new fatal error.
+- Browser close failures are logged as a **warning only** (not fatal) — the run has already completed its actual work; a stuck browser process is a housekeeping issue, not a run failure. Best-effort kill of the browser process if the graceful close fails.
+- Excel file save/close failures are logged as a **warning only**, with a retry (e.g., wait 2s and retry once) — the per-item and fatal-error rows have typically already been written incrementally during the run, so a summary-write failure doesn't lose the detailed log.
+
+### Internal Flow
+
+```mermaid
+graph TD
+    A[Phase 6 Start - reached from any path] --> B[Tally Submitted/Skipped/Failed counts]
+    B --> C[Write Run Summary row to Log]
+    C --> D{Summary write OK?}
+    D -->|No| E[Retry once] --> F[Log warning if still failing]
+    D -->|Yes| G[Close Browser]
+    F --> G
+    G --> H{Browser closed cleanly?}
+    H -->|No| I[Force-kill browser process] --> J[Log warning]
+    H -->|Yes| K[Save and close Excel log file]
+    J --> K
+    K --> L[End Run]
+```
+
+---
+
+## Full-Design Notes
+- Every phase past Phase 1 assumes the config, run log path, and browser handle established in Phase 1 remain valid for the whole run.
+- Phase 2 (Login) is currently **blocked** pending the SSO/magic-link decision — Phases 3–6 are designed independently of the login mechanism and do not need to change once that's resolved, since login only affects how the browser session is authenticated before Phase 3 begins.
