@@ -11,136 +11,147 @@
 
 ### Step-by-Step Actions
 
-```
-Step 1.1: Read Config Values
-  Action: Set variable (x7, one per config value — see table below)
-  Display name: "Set Config - <Name>"
-  Notes: In v1, config values are hardcoded as flow variables at the top of
-         the flow inside this section, grouped together as the "config block".
-         This keeps them easy to relocate into a settings file/UiPath
-         Config.xlsx later without restructuring the flow.
+Each action is one row: **Action** is the PA Desktop action type, **Display Name** is what shows in the flow, **Properties** are the inputs/settings, **Output** is the variable produced.
 
-  Variables set here:
-    ConcurBaseUrl      (Text)    e.g. "https://www.concursolutions.com"
-    CredentialFilePath (Text)    e.g. "C:\Bots\Concur\credentials.txt"
-    ExportFolderPath   (Text)    e.g. "C:\Bots\Concur\Exports"
-    LogFolderPath      (Text)    e.g. "C:\Bots\Concur\Logs"
-    MaxRetry           (Number)  3
-    TimeoutSeconds     (Number)  30
-    RetryDelaySeconds  (Number)  3
+---
 
-Step 1.2: Get Current Date and Time
-  Action: Get current date and time
-  Display name: "Get Run Start Time"
-  Output: RunStartDateTime (DateTime)
+**Step 1.1 — Set Config Values** *(7 actions, one per value)*
 
-Step 1.3: Format Run Timestamp
-  Action: Convert datetime to text
-  Display name: "Format Run Timestamp"
-  Input: RunStartDateTime
-  Format: Custom → yyyyMMdd_HHmmss
-  Output: RunTimestamp (Text)
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Set Config - Concur Base URL | Value: `"https://www.concursolutions.com"` | `ConcurBaseUrl` (Text) |
+| Set variable | Set Config - Credential File Path | Value: `"C:\Bots\Concur\credentials.txt"` | `CredentialFilePath` (Text) |
+| Set variable | Set Config - Export Folder Path | Value: `"C:\Bots\Concur\Exports"` | `ExportFolderPath` (Text) |
+| Set variable | Set Config - Log Folder Path | Value: `"C:\Bots\Concur\Logs"` | `LogFolderPath` (Text) |
+| Set variable | Set Config - Max Retry | Value: `3` | `MaxRetry` (Number) |
+| Set variable | Set Config - Timeout Seconds | Value: `30` | `TimeoutSeconds` (Number) |
+| Set variable | Set Config - Retry Delay Seconds | Value: `3` | `RetryDelaySeconds` (Number) |
 
-Step 1.4: Format Log Date
-  Action: Convert datetime to text
-  Display name: "Format Log Date"
-  Input: RunStartDateTime
-  Format: Custom → yyyyMMdd
-  Output: LogDateText (Text)
+> **Note:** In v1, config values are hardcoded as flow variables at the top of the flow, grouped together as one "config block." Kept isolated here so it can be relocated into a settings file / UiPath `Config.xlsx` later without restructuring the flow.
 
-Step 1.5: Build Log File Path
-  Action: Set variable
-  Display name: "Build Log File Path"
-  Value: LogFolderPath + "\ConcurLog_" + LogDateText + ".xlsx"
-  Output: LogFilePath (Text)
+---
 
-Step 1.6: Build Export File Path
-  Action: Set variable
-  Display name: "Build Export File Path"
-  Value: ExportFolderPath + "\PendingExport_" + RunTimestamp + ".xlsx"
-  Output: ExportFilePath (Text)
+**Step 1.2 — Get Run Start Time**
 
-Step 1.7: Check If Log File Exists
-  Action: Check if file exists
-  Display name: "Check Log File Exists"
-  Input: LogFilePath
-  Output: LogFileExists (Boolean)
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Get current date and time | Get Run Start Time | — | `RunStartDateTime` (DateTime) |
 
-Step 1.8: Create Log File (conditional)
-  Action: If → LogFileExists = False
-    Then:
-      Action: Launch Excel
-        Display name: "Launch Excel - New Log"
-        Document path: (blank / new workbook)
-        Output: ExcelLogInstance
-      Action: Write to Excel worksheet
-        Display name: "Write Log Header Row"
-        Cell: A1
-        Values: ["Timestamp", "RunID", "UserID", "RequestID", "Outcome", "Reason"]
-      Action: Save Excel
-        Display name: "Save New Log File"
-        Save as: LogFilePath
-      Action: Close Excel
-        Display name: "Close Log After Create"
-    Else:
-      (no action — file already exists, will be opened fresh in Step 1.9)
-  End
+---
 
-Step 1.9: Launch Excel with Log File
-  Action: Launch Excel
-  Display name: "Launch Excel - Open Log"
-  Document path: LogFilePath
-  Output: ExcelLogInstance
+**Step 1.3 — Format Run Timestamp**
 
-Step 1.10: Read Credential File
-  Action: Read from file (or "Read text from file")
-  Display name: "Read Credential File"
-  File: CredentialFilePath
-  Output: AdminPassword (Text, marked sensitive — do not log)
-  Notes: File contains only the admin password (or "user:pass" if the
-         username also needs externalizing later). Value is never written
-         to the log or printed to flow variables pane if avoidable —
-         use the "Sensitive" data type toggle in PA Desktop.
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Convert datetime to text | Format Run Timestamp | Input: `RunStartDateTime` · Format: Custom `yyyyMMdd_HHmmss` | `RunTimestamp` (Text) |
 
-Step 1.11: Launch Browser
-  Action: Launch new Microsoft Edge (or Chrome)
-  Display name: "Launch Browser at Concur Login"
-  Initial URL: ConcurBaseUrl
-  Launch mode: Maximized, new instance, clear browsing data on close: No
-    (avoid clearing shared profile data on a shared bot machine)
-  Timeout: TimeoutSeconds
-  Output: Browser (Browser instance)
+---
 
-Step 1.12: Verify Page Loaded
-  Action: Wait for web page content / element
-  Display name: "Wait for Login Page Element"
-  Target: username input field (or page title contains "Sign In")
-  Timeout: TimeoutSeconds
-  Output: LoginPageLoaded (Boolean, via "On error" branch — see below)
-```
+**Step 1.4 — Format Log Date**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Convert datetime to text | Format Log Date | Input: `RunStartDateTime` · Format: Custom `yyyyMMdd` | `LogDateText` (Text) |
+
+---
+
+**Step 1.5 — Build Log File Path**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Build Log File Path | Value: `LogFolderPath + "\ConcurLog_" + LogDateText + ".xlsx"` | `LogFilePath` (Text) |
+
+---
+
+**Step 1.6 — Build Export File Path**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Build Export File Path | Value: `ExportFolderPath + "\PendingExport_" + RunTimestamp + ".xlsx"` | `ExportFilePath` (Text) |
+
+---
+
+**Step 1.7 — Check Log File Exists**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Check if file exists | Check Log File Exists | Input: `LogFilePath` | `LogFileExists` (Boolean) |
+
+---
+
+**Step 1.8 — Create Log File (conditional)**
+
+`If LogFileExists = False:`
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Launch Excel | Launch Excel - New Log | Document: blank/new workbook | `ExcelLogInstance` |
+| Write to Excel worksheet | Write Log Header Row | Cell: `A1` · Values: `["Timestamp", "RunID", "UserID", "RequestID", "Outcome", "Reason"]` | — |
+| Save Excel | Save New Log File | Save as: `LogFilePath` | — |
+| Close Excel | Close Log After Create | — | — |
+
+`Else:` no action — file already exists, opened fresh in Step 1.9.
+
+---
+
+**Step 1.9 — Launch Excel with Log File**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Launch Excel | Launch Excel - Open Log | Document path: `LogFilePath` | `ExcelLogInstance` |
+
+---
+
+**Step 1.10 — Read Credential File**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Read text from file | Read Credential File | File: `CredentialFilePath` | `AdminPassword` (Text, **Sensitive** — never logged) |
+
+> **Note:** File contains only the admin password (or `user:pass` if the username also needs externalizing later). Use PA Desktop's "Sensitive" data type toggle so the value never appears in the flow variables pane or logs.
+
+---
+
+**Step 1.11 — Launch Browser**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Launch new Microsoft Edge (or Chrome) | Launch Browser at Concur Login | Initial URL: `ConcurBaseUrl` · Mode: Maximized, new instance · Clear browsing data on close: No · Timeout: `TimeoutSeconds` | `Browser` (Browser instance) |
+
+> Clear-browsing-data is set to **No** to avoid wiping shared profile data on a shared bot machine.
+
+---
+
+**Step 1.12 — Verify Login Page Loaded**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Wait for web page content / element | Wait for Login Page Element | Target: username input field (or page title contains "Sign In") · Timeout: `TimeoutSeconds` | Flow continues on success; failure routes to error handler below |
 
 ### Error Handling (this section)
 
-```
-Wrap Steps 1.10–1.12 in an "On block error" error handler:
-  On error in Step 1.10 (credential file read):
-    Action: Write to Excel worksheet — append Fatal row to LogFilePath
-      Timestamp, RunID=RunTimestamp, UserID="", RequestID="",
-      Outcome="Fatal", Reason="Credential file missing or unreadable"
-    Action: Close Excel (save)
-    Action: Terminate flow (stop run)
+Steps 1.10–1.12 are wrapped in an **"On block error"** error handler.
 
-  On error in Steps 1.11–1.12 (browser/page load):
-    Action: Increment RetryCount
-    If RetryCount < MaxRetry:
-      Action: Wait (RetryDelaySeconds)
-      Go to Step 1.11 (retry launch)
-    Else:
-      Action: Write Fatal row to log (Reason="Browser/login page failed to load after retries")
-      Action: Close browser if open
-      Action: Close Excel (save)
-      Action: Terminate flow
-```
+**On error in Step 1.10 (credential file read) — fatal, no retry:**
+
+| Action | Display Name | Properties |
+|---|---|---|
+| Write to Excel worksheet | Log Fatal - Credential Read Failed | Append row: Timestamp, RunID=`RunTimestamp`, UserID="", RequestID="", Outcome="Fatal", Reason="Credential file missing or unreadable" |
+| Close Excel | Save and Close Log | Save: Yes |
+| Terminate flow | Stop Run - Fatal Error | — |
+
+**On error in Steps 1.11–1.12 (browser/page load) — retry then fatal:**
+
+| Action | Display Name | Properties |
+|---|---|---|
+| Increment variable | Increment Retry Count | `RetryCount + 1` |
+| If | Check Retry Count | `RetryCount < MaxRetry` |
+| → Then: Wait | Wait Before Retry | Duration: `RetryDelaySeconds` |
+| → Then: Go to | Retry Browser Launch | Go to Step 1.11 |
+| → Else: Write to Excel worksheet | Log Fatal - Browser Launch Failed | Reason="Browser/login page failed to load after retries" |
+| → Else: Close browser | Close Browser if Open | — |
+| → Else: Close Excel | Save and Close Log | Save: Yes |
+| → Else: Terminate flow | Stop Run - Fatal Error | — |
 
 ### Variables Declared in This Section
 
