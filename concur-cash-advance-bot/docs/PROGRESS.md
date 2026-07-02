@@ -25,8 +25,8 @@ Two open questions to resolve before Phase 4:
   - [x] Phase 1/6 — Initialize & Load Settings (confirmed)
   - [!] Phase 2/6 — Login to Concur (BLOCKED — login method pending IT decision: SSO Windows Integrated Auth vs magic link)
   - [x] Phase 3/6 — Get Pending Report (confirmed)
-  - [~] Phase 4/6 — Process Pending Requests Loop (proposed, awaiting confirmation)
-  - [ ] Phase 5/6 — Exception Handling
+  - [x] Phase 4/6 — Process Pending Requests Loop (confirmed)
+  - [~] Phase 5/6 — Exception Handling (proposed, awaiting confirmation)
   - [ ] Phase 6/6 — Cleanup & Reporting
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design

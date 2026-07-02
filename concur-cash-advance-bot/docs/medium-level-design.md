@@ -250,7 +250,77 @@ graph TD
 ```
 
 ## Phase 5 of 6: Exception Handling
-*Pending confirmation of Phase 4.*
+
+### Purpose & Scope
+Exception handling is not a separate sequential phase — it is a cross-cutting strategy applied throughout all other phases. This section documents the complete error handling model so it can be implemented consistently in Phase 4 (Detailed Design) and serves as the reference for any deviation during build.
+
+Two tiers of exceptions exist:
+
+- **Fatal (run-level):** Something has gone wrong that makes it impossible to continue the run at all. Abort, log the error, attempt cleanup, and exit.
+- **Per-item (loop-level):** Something has gone wrong for one record only. Log, skip that item, clear Act-as context, and continue with the next.
+
+### Error Classification
+
+| Scenario | Tier | Action |
+|---|---|---|
+| Config/credential file missing or unreadable | Fatal | Log error, abort run |
+| Browser fails to launch | Fatal | Retry × `MaxRetry`, then abort |
+| Login page fails to load | Fatal | Retry × `MaxRetry`, then abort |
+| Login fails (bad credentials / unexpected redirect) | Fatal | Log error + page URL, abort |
+| Admin pending grid fails to load | Fatal | Retry × `MaxRetry`, then abort |
+| Export file never appears after download | Fatal | Retry × `MaxRetry`, then abort |
+| Export file unreadable / missing headers | Fatal | Log error, abort |
+| "Act as" switch fails for a user | Per-item | Log "Skip — Act as failed", clear context, next item |
+| Cash Advances page fails to load after retries | Per-item | Log "Skip — page load failed", next item |
+| Pending block not found on grid | Per-item | Log "Skip — block not found", next item |
+| Submit button not found on detail page | Per-item | Log "Skip — submit button missing", next item |
+| Submit click does not confirm within timeout | Per-item | Log "Failed — submit unconfirmed", next item |
+| "Stop acting as" button not found | Per-item | Log warning, attempt page refresh to restore context, next item |
+| Any unhandled/unexpected error inside the loop | Per-item | Log "Failed — unexpected: [error detail]", best-effort context clear, next item |
+
+### Retry Strategy
+- **Where retries apply:** page loads and downloads only — not business actions (Submit clicks are not retried; a failed submit is logged and skipped).
+- **Retry count:** `MaxRetry` (set in config, default 3).
+- **Retry delay:** short fixed pause between attempts (e.g., 3 seconds) to allow transient network issues to clear.
+- **Retry scope:** retries restart the full sub-sequence (e.g., full page navigation, not just the failed click).
+
+### Logging Standard
+Every outcome — success or failure — writes one row to the rolling daily Excel log:
+
+| Column | Value |
+|---|---|
+| Timestamp | Date and time of the outcome |
+| RunID | `RunTimestamp` from Phase 1 — groups all rows from one run |
+| UserID | User being processed |
+| RequestID | Request ID/Name from the export |
+| Outcome | "Submitted" / "Skipped" / "Failed" / "Fatal" / "No items" |
+| Reason | Human-readable detail (e.g., "Block not found", "Act as failed", "Submit unconfirmed") |
+
+Fatal errors also write a "Fatal" row before the run aborts, so every run has at least one log entry regardless of how it ended.
+
+### Internal Flow
+
+```mermaid
+graph TD
+    subgraph Fatal Path
+        F1[Fatal Error Occurs] --> F2[Write Fatal row to Log]
+        F2 --> F3[Attempt to close browser]
+        F3 --> F4[End Run]
+    end
+
+    subgraph Per-Item Path
+        P1[Per-item Error Occurs] --> P2[Set Outcome and Reason]
+        P2 --> P3[Best-effort - Clear Act-as context]
+        P3 --> P4[Write log row]
+        P4 --> P5[Continue to next item]
+    end
+
+    subgraph Retry Logic
+        R1[Action fails] --> R2{Retries left?}
+        R2 -->|Yes| R3[Wait 3s] --> R4[Retry action]
+        R2 -->|No| R5[Escalate to Fatal or Per-item]
+    end
+```
 
 ## Phase 6 of 6: Cleanup & Reporting
 *Pending confirmation of Phase 5.*
