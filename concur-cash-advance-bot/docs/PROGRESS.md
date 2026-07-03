@@ -26,7 +26,8 @@ Phase 2/6 detailed design is deferred until this is resolved. All other phases a
 - [x] Phase 3 — Medium-Level Design (complete, all 6 sub-phases; Phase 2/6 flagged blocked)
 - [~] Phase 4 — Detailed Design (in progress)
   - **NOTE:** `detailed-design.md` now opens with a **PA Desktop Syntax Conventions** section. All step tables follow it: `%Var%` interpolation, no quotes on literals, `%3%` for Number values, `%...%` for expressions, and — critically — **PA Desktop subflows have NO parameters (all variables are global)**, so callers set `Log*` globals before running `WriteLogRow`.
-  - [~] Phase 1/6 — Initialize & Load Settings (CORRECTED after PA syntax review — awaiting re-confirmation)
+  - **REVIEW LOOP:** After building each detailed-design phase, run the `rpa-design-reviewer` agent (`.claude/agents/rpa-design-reviewer.md`) against it. It checks correctness (vs `pa-desktop-reference.md`) and completeness (vs medium-level design + PDD) and returns PASS/FAIL. Loop fix→re-review until PASS (zero blockers/major). Reference doc grows with each verified rule. NOTE: custom agent types only load at session start — mid-session, run the same instructions via a `general-purpose` agent.
+  - [x] Phase 1/6 — Initialize & Load Settings (reviewed → PASS on 2nd pass; orphaned-browser retry fix + config-validation + RetryCount init applied. Awaiting user confirmation.)
   - [!] Phase 2/6 — Login to Concur (BLOCKED — deferred until login method decided)
   - [ ] Phase 3/6 — Get Pending Report
   - [ ] Phase 4/6 — Process Pending Requests Loop

@@ -43,6 +43,9 @@
 | 4.1 | File-existence check | "If file exists" is a **conditional block** (if exists / if does not exist), not a boolean-returning action. | ⚠️ |
 | 4.2 | `If` condition structure | Separate fields: First operand `%A%` · Operator (dropdown, e.g. "Less than or equal to") · Second operand `%B%`. Not a single expression box. | ⚠️ |
 | 4.3 | Increment variable | "Increment variable" action: Variable `%RetryCount%` + Increment-by value `1`. Not `RetryCount + 1` inline. | ⚠️ |
+| 4.4 | "is empty" operator & OR-combined conditions in one `If` | Design assumes a unary "is empty" operator and multiple OR'd conditions in a single `If`. If PA Desktop doesn't support this in one action, split into stacked `If` blocks. | ⚠️ |
+| 4.5 | Stop the whole run | Assumed action name "Stop flow" (a.k.a. "Exit" / end flow). Confirm exact action. | ⚠️ |
+| 4.6 | Best-effort action | Set an action's "On error → Continue flow run" so a non-critical failure (e.g. closing an unset browser) doesn't abort. | ⚠️ |
 
 ## 5. Retry Loop Semantics
 
@@ -61,6 +64,8 @@
 ## Open items to verify in PA Desktop
 - 3.2 / 3.3 exact action names and output variable names.
 - 4.1 exact "If file exists" block wording.
+- 4.4 whether one `If` supports "is empty" + OR'd conditions, or needs stacked `If` blocks.
+- 4.5 exact "Stop flow" / end-run action name.
 - 5.1 confirm off-by-one on the retry operator with a real failing case.
 
 Add new rows here as they're discovered and tested.

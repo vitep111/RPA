@@ -172,13 +172,41 @@ Use **"If file exists"** with condition *"if file does not exist"* → `%LogFile
 
 ---
 
-**Step 1.11 — Launch Browser**
+**Step 1.10b — Validate Config & Credential** *(fatal branch for the medium-level "Settings valid?" node)*
+
+Reading the file can succeed but return an **empty** value; and a config field could be blank. This step catches those before we try to use them.
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| If | Check Config Not Empty | Condition (OR of): `%ConcurBaseUrl%` is empty · `%CredentialFilePath%` is empty · `%LogFolderPath%` is empty · `%ExportFolderPath%` is empty · `%AdminPassword%` is empty | branch |
+| → Then: Set variable | Set Log Fields - Config Invalid | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Config error - a required setting or credential is blank` | — |
+| → Then: Run subflow | Log Fatal - Config Invalid | Run subflow `WriteLogRow` | — |
+| → Then: Close Excel | Save and Close Log | Save mode: Save document | — |
+| → Then: Stop flow | Stop Run - Config Error | (ends the run) | — |
+
+> The log is already open (Step 1.9) so a config-error row can be written before aborting — satisfies the PDD requirement that every run leaves at least one log entry.
+
+---
+
+**Step 1.10c — Initialize Retry Count**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Initialize Retry Count | Value: `%0%` | `RetryCount` (Number) |
+
+> Must exist as a real action (not just a note) — the browser-fail error handler increments and compares `%RetryCount%`, which would reference an uninitialized variable without this step.
+
+---
+
+**Step 1.11 — Launch Browser** *(retry target)*
+
+Place a **Label** action named `RetryBrowserLaunch` immediately before this step so the error handler's "Go to" has a concrete target.
 
 | Action | Display Name | Properties | Output |
 |---|---|---|---|
 | Launch new Microsoft Edge (or Chrome) | Launch Browser at Concur Login | Initial URL: `%ConcurBaseUrl%` · Window state: Maximized · Clear cache/cookies: No · Timeout: `%TimeoutSeconds%` | `Browser` (Browser instance) |
 
-> Clear-cache/cookies set to **No** to avoid wiping shared profile data on a shared bot machine.
+> Clear-cache/cookies set to **No** to avoid wiping shared profile data on a shared bot machine. **Deviation note:** the medium-level design said "clean session, no leftover session." This is a deliberate reconciliation — preserved cookies may also help a future SSO login. Revisit once Phase 2's login method (SSO vs magic link) is chosen; if a truly clean session is required, flip this to Yes.
 
 ---
 
@@ -207,13 +235,16 @@ Steps 1.10–1.12 sit inside an **"On block error"** handler. Both branches set 
 |---|---|---|
 | Increment variable | Increment Retry Count | Variable: `%RetryCount%` · Increment by: `1` |
 | If | Check Retry Count | First operand: `%RetryCount%` · Operator: `Less than or equal to` · Second operand: `%MaxRetry%` |
+| → Then: Close browser | Close Failed Browser | Instance: `%Browser%` · On error: continue (best-effort — instance may be unset if launch itself failed) |
 | → Then: Wait | Wait Before Retry | Duration (seconds): `%RetryDelaySeconds%` |
-| → Then: Go to | Retry Browser Launch | Label at Step 1.11 |
+| → Then: Go to | Retry Browser Launch | Label: `RetryBrowserLaunch` (placed before Step 1.11) |
 | → Else: Set variable | Set Log Fields - Browser Fail | `LogOutcome` = `Fatal` · `LogReason` = `Browser/login page failed to load after retries` |
 | → Else: Run subflow | Log Fatal - Browser Launch Failed | Run subflow `WriteLogRow` |
-| → Else: Close browser | Close Browser if Open | Instance: `%Browser%` |
+| → Else: Close browser | Close Browser if Open | Instance: `%Browser%` · On error: continue (best-effort — may be unset if launch failed) |
 | → Else: Close Excel | Save and Close Log | Save mode: Save document |
 | → Else: Stop flow | Stop Run - Fatal Error | (ends the run) |
+
+> **Retry hygiene:** the failed browser instance is closed at the top of the retry branch so retries don't accumulate orphaned Edge/Chrome processes on a shared bot machine. Both close actions are best-effort (`On error: continue`) because `%Browser%` may be unset when the *launch* itself failed.
 
 ### Variables Declared / Used in This Section
 
@@ -234,7 +265,7 @@ Steps 1.10–1.12 sit inside an **"On block error"** handler. Both branches set 
 | `ExcelLogInstance` | Excel instance | Global | Step 1.8 / reopened 1.9 |
 | `AdminPassword` | Text (Sensitive) | Global | Step 1.10 |
 | `Browser` | Browser instance | Global | Step 1.11 |
-| `RetryCount` | Number | Global | Init `%0%` before Step 1.11; used in error handler |
+| `RetryCount` | Number | Global | Init `%0%` in Step 1.10c; incremented in error handler |
 | `LogUserID` / `LogRequestID` / `LogOutcome` / `LogReason` | Text | Global | Set by callers of `WriteLogRow` |
 
 ### Notes for Implementation
