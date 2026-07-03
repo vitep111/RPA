@@ -12,7 +12,7 @@
 
 ## Current phase
 **Phase 4: Detailed Design — in progress.**
-Phase 1/6 (Initialize & Load Settings) detailed design saved in `detailed-design.md`. Awaiting user confirmation before moving to Phase 3/6's detailed design (Phase 2/6 Login remains blocked, skipped for now).
+Phase 1/6 (Initialize & Load Settings) and Phase 3/6 (Get Pending Report) detailed designs saved in `detailed-design.md`, both reviewed → PASS. Awaiting user confirmation of Phase 3/6 before moving to Phase 4/6 (Process Pending Requests Loop). (Phase 2/6 Login remains blocked, skipped for now.)
 
 ## Login blocker (still open)
 Password login is out (requires 2FA). Deciding between:
@@ -29,7 +29,7 @@ Phase 2/6 detailed design is deferred until this is resolved. All other phases a
   - **REVIEW LOOP:** After building each detailed-design phase, run the `rpa-design-reviewer` agent (`.claude/agents/rpa-design-reviewer.md`) against it. It checks correctness (vs `pa-desktop-reference.md`) and completeness (vs medium-level design + PDD) and returns PASS/FAIL. Loop fix→re-review until PASS (zero blockers/major). Reference doc grows with each verified rule. NOTE: custom agent types only load at session start — mid-session, run the same instructions via a `general-purpose` agent.
   - [x] Phase 1/6 — Initialize & Load Settings (reviewed → PASS on 2nd pass; orphaned-browser retry fix + config-validation + RetryCount init applied. Awaiting user confirmation.)
   - [!] Phase 2/6 — Login to Concur (BLOCKED — deferred until login method decided)
-  - [ ] Phase 3/6 — Get Pending Report
+  - [x] Phase 3/6 — Get Pending Report (reviewed → PASS on 3rd pass; fixed: missing fatal handler for unreadable export file, missing retry delay in export-download retry, step-numbering gap, empty-list export-file cleanup. Open assumptions flagged inline: exact admin-grid nav path/URL, filter-control action, Datatable `.Columns` "does not contain" expression. Awaiting user confirmation.)
   - [ ] Phase 4/6 — Process Pending Requests Loop
   - [ ] Phase 5/6 — Exception Handling
   - [ ] Phase 6/6 — Cleanup & Reporting

@@ -59,6 +59,21 @@
 |---|---|---|---|
 | 6.1 | Secrets | Use the "Sensitive" data-type toggle so the value is hidden from the variables pane and logs. Never write a secret to the Excel log. | ⚠️ |
 
+## 7. Loops & Manual Errors
+
+| # | Rule | Detail | Status |
+|---|---|---|---|
+| 7.1 | `Loop Condition` (While-style) | Loops while a condition holds, same operand/operator structure as `If` (4.2). Used to poll for a file's existence up to a timeout. | ⚠️ |
+| 7.2 | `Exit Loop` | Action that breaks out of the innermost enclosing loop. | ⚠️ |
+| 7.3 | `Throw error` | Manually raises an error with a custom message, which is caught by the surrounding "On block error" handler like any action failure. Used to convert a "polled and gave up" condition into the same fatal/retry path as a thrown action error. | ⚠️ |
+| 7.4 | Reading an Excel range to a table | "Read from Excel worksheet" (mode: read all/used range, first row as headers) outputs a **Datatable** variable. Row count is read via `%TableVar.RowsCount%`. | ⚠️ |
+
+## 8. Global Retry Counters — Reuse Hazard
+
+| # | Rule | Detail | Status |
+|---|---|---|---|
+| 8.1 | `RetryCount` is a single global reused across every retryable block in the flow | It is **not** auto-reset between blocks. Each new retryable section must explicitly `Set variable RetryCount = %0%` immediately before its own retry target label, otherwise a block that entered with a nonzero `RetryCount` (left over from an earlier retry elsewhere in the run) gets fewer retries than `MaxRetry` allows. | ⚠️ |
+
 ---
 
 ## Open items to verify in PA Desktop
@@ -67,5 +82,7 @@
 - 4.4 whether one `If` supports "is empty" + OR'd conditions, or needs stacked `If` blocks.
 - 4.5 exact "Stop flow" / end-run action name.
 - 5.1 confirm off-by-one on the retry operator with a real failing case.
+- 7.1–7.4 loop/throw-error/datatable action names, exactly as PA Desktop labels them.
+- Datatable column-membership/"does not contain" expression (used in Phase 3 Step 3.10 header validation) — not yet a confirmed rule; may need stacked `If` blocks per 4.4 instead.
 
 Add new rows here as they're discovered and tested.

@@ -272,3 +272,246 @@ Steps 1.10–1.12 sit inside an **"On block error"** handler. Both branches set 
 - The log file is opened once (Step 1.9) and **kept open for the whole run**; only saved/closed in Phase 6. (In an error abort it's saved/closed in the handler.)
 - `AdminUser` is **deferred to Phase 2's detailed design** — the login mechanism (SSO vs magic link) decides whether a username variable is needed.
 - File paths assume a Windows bot machine with **local** folders. If `ExportFolderPath` / `LogFolderPath` live on a **network drive**, flag it — network drops need extra retry handling.
+
+---
+
+## Phase 3 of 6: Get Pending Report
+
+**Section name (flow comment):** `>> SECTION: Get Pending Report`
+
+> **Picks up where Phase 1 left off:** `Browser` is already open. Phase 2 (Login) is blocked/deferred, so this section assumes the browser is already authenticated and landed on the Concur home page when it runs in the full flow. Nothing below depends on *how* login happened.
+
+> **Retry-counter hygiene (see reference 8.1):** `RetryCount` is a single global reused everywhere. Phase 1 may have left it at a nonzero value (if browser launch needed a retry). This section resets it to `%0%` immediately before **each** of its two independent retry targets (Step 3.0 before Step 3.1, and Step 3.4 before Step 3.5) so neither retry block inherits leftover count from anywhere else in the run.
+
+### Step-by-Step Actions
+
+---
+
+**Step 3.0 — Reset Retry Count (Grid Navigation)**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Reset Retry Count - Grid Nav | `%0%` | `RetryCount` (Number) |
+
+---
+
+**Step 3.1 — Navigate to Admin Pending Grid** *(retry target)*
+
+Place a **Label** action named `RetryPendingGridNav` immediately before this step.
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Go to web page | Navigate to Pending Grid | Browser: `%Browser%` · URL: `%ConcurBaseUrl%/cash-advance/admin/pending` | — |
+
+> **Open assumption:** the exact admin-grid URL/navigation path is unconfirmed — placeholder shown. Confirm with a live walkthrough of the Concur admin UI; if the grid is reached via in-app clicks (menu → Cash Advance Admin) rather than a direct URL, replace this with the click sequence.
+
+---
+
+**Step 3.2 — Wait for Pending Grid to Load**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Wait for web page content (element appears) | Wait for Grid Element | UI element: pending-requests grid/table header · Timeout: `%TimeoutSeconds%` | Flow continues on success; timeout raises an error → handler below |
+
+---
+
+**Step 3.3 — Ensure Filter = Pending Submission Status**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set value on web element (assumed dropdown filter) | Set Status Filter - Pending Submission | UI element: status filter dropdown · Value: `Pending Submission` | — |
+
+> **Open assumption:** whether the admin grid defaults to pending-only or needs an explicit filter selection each run is unconfirmed, and so is the exact PA Desktop action for the filter control (dropdown vs. multi-select vs. list). Pin the exact action name once the live Concur admin UI is confirmed; if the grid is always pre-scoped to pending items (e.g., a dedicated admin view with no filter control), delete this step.
+
+### Error Handling (Steps 3.1–3.3)
+
+Sits inside an **"On block error"** handler, same retry-then-fatal shape as Phase 1's browser launch.
+
+| Action | Display Name | Properties |
+|---|---|---|
+| Increment variable | Increment Retry Count - Grid Nav | Variable: `%RetryCount%` · Increment by: `1` |
+| If | Check Retry Count - Grid Nav | First operand: `%RetryCount%` · Operator: `Less than or equal to` · Second operand: `%MaxRetry%` |
+| → Then: Wait | Wait Before Retry - Grid Nav | Duration (seconds): `%RetryDelaySeconds%` |
+| → Then: Go to | Retry Pending Grid Nav | Label: `RetryPendingGridNav` |
+| → Else: Set variable | Set Log Fields - Grid Load Failed | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Admin pending grid failed to load after retries` |
+| → Else: Run subflow | Log Fatal - Grid Load Failed | Run subflow `WriteLogRow` |
+| → Else: Close browser | Close Browser on Fatal | Instance: `%Browser%` · On error: continue |
+| → Else: Close Excel | Save and Close Log | Save mode: Save document |
+| → Else: Stop flow | Stop Run - Fatal Error | (ends the run) |
+
+---
+
+**Step 3.4 — Reset Retry Count (Export/Download)**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Reset Retry Count - Export | `%0%` | `RetryCount` (Number) |
+
+---
+
+**Step 3.5 — Click Export to Excel** *(retry target)*
+
+Place a **Label** action named `RetryExportClick` immediately before this step.
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Reset File Wait Count | `%0%` | `FileWaitCount` (Number) |
+| Click | Click Export to Excel Button | UI element: Export button on pending grid | — |
+
+> `FileWaitCount` is reset here, at the top of the retry target, so every export attempt (first try and any retry) gets a fresh polling budget. It is a separate counter from `RetryCount`: `RetryCount` governs *how many times we click Export and re-poll*; `FileWaitCount` governs *how many seconds we poll for the file to appear after one click*. Conflating them would make the click-retry budget and the download-wait budget the same number, which they conceptually aren't.
+
+---
+
+**Step 3.6 — Poll for Export File to Appear**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Loop Condition | Poll Loop - Wait for Export File | First operand: `%FileWaitCount%` · Operator: `Less than` · Second operand: `%TimeoutSeconds%` | — |
+| → If file exists | Check Export File Exists | File path: `%ExportFilePath%` | branch |
+| → → Then: Exit Loop | Exit Poll Loop - File Found | — | — |
+| → → Else: Wait | Wait 1 Second Before Recheck | Duration (seconds): `%1%` | — |
+| → → Else: Increment variable | Increment File Wait Count | Variable: `%FileWaitCount%` · Increment by: `1` | — |
+
+---
+
+**Step 3.7 — Confirm File Was Found (else escalate)**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| If file exists | Final Check Export File | File path: `%ExportFilePath%` | branch |
+| → Else: Throw error | Throw - Export File Timeout | Message: `Export file did not appear within %TimeoutSeconds% seconds` | (caught by the on-block-error handler below, same as a native action failure) |
+
+### Error Handling (Steps 3.5–3.7)
+
+Sits inside an **"On block error"** handler wrapping Steps 3.5–3.7 (covers both a failed/missing Export click and a download that never lands).
+
+| Action | Display Name | Properties |
+|---|---|---|
+| Increment variable | Increment Retry Count - Export | Variable: `%RetryCount%` · Increment by: `1` |
+| If | Check Retry Count - Export | First operand: `%RetryCount%` · Operator: `Less than or equal to` · Second operand: `%MaxRetry%` |
+| → Then: Wait | Wait Before Retry - Export | Duration (seconds): `%RetryDelaySeconds%` |
+| → Then: Go to | Retry Export Click | Label: `RetryExportClick` |
+| → Else: Set variable | Set Log Fields - Export Failed | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Export to Excel failed or file never downloaded after retries` |
+| → Else: Run subflow | Log Fatal - Export Failed | Run subflow `WriteLogRow` |
+| → Else: Close browser | Close Browser on Fatal | Instance: `%Browser%` · On error: continue |
+| → Else: Close Excel | Save and Close Log | Save mode: Save document |
+| → Else: Stop flow | Stop Run - Fatal Error | (ends the run) |
+
+---
+
+**Step 3.8 — Launch Excel on Export File**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Launch Excel | Launch Excel - Open Export | Open document: `%ExportFilePath%` · Visible: No | `ExcelExportInstance` (Excel instance) |
+
+> Deliberately a **separate Excel instance** from `ExcelLogInstance` — the log workbook stays open throughout the run; the export workbook is short-lived (read once, then closed in Step 3.13).
+
+---
+
+**Step 3.9 — Read Export Worksheet into Table**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Read from Excel worksheet | Read Pending Export | Instance: `%ExcelExportInstance%` · Range: all/used range · Get: first row as headers | `PendingList` (Datatable) |
+
+### Error Handling (Steps 3.8–3.9) — fatal, no retry
+
+Sits inside an **"On block error"** handler wrapping Launch Excel (3.8) and Read (3.9). A corrupt, password-protected, or otherwise unreadable export file won't fix itself on a retry, so this escalates straight to fatal — no retry loop, unlike Steps 3.1–3.7.
+
+| Action | Display Name | Properties |
+|---|---|---|
+| Set variable | Set Log Fields - Export File Unreadable | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Export file unreadable - path: %ExportFilePath%` |
+| Run subflow | Log Fatal - Export File Unreadable | Run subflow `WriteLogRow` |
+| Close Excel | Close Export Excel on Fatal | Instance: `%ExcelExportInstance%` · On error: continue |
+| Close browser | Close Browser on Fatal | Instance: `%Browser%` · On error: continue |
+| Close Excel | Save and Close Log | Save mode: Save document |
+| Stop flow | Stop Run - Fatal Error | (ends the run) |
+
+---
+
+**Step 3.10 — Validate Export Headers** *(fatal branch, no retry)*
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| If | Check Required Columns Present | Condition (OR of): `%PendingList.Columns%` does not contain `User ID` · `%PendingList.Columns%` does not contain `Request ID` | branch |
+
+> **Unverified:** a Datatable `.Columns` membership/"does not contain" expression is assumed here by analogy with `.RowsCount` (reference 7.4) but is not itself a verified PA Desktop rule. Confirm the exact column-presence check live; if PA Desktop has no such expression, replace with reading the header row of Step 3.9's range explicitly and comparing cell values, or split into stacked `If` blocks per reference 4.4.
+| → Then: Set variable | Set Log Fields - Bad Export Headers | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Export file missing expected columns (User ID / Request ID) - path: %ExportFilePath%` | — |
+| → Then: Run subflow | Log Fatal - Bad Export Headers | Run subflow `WriteLogRow` | — |
+| → Then: Close Excel | Close Export Excel on Fatal | Instance: `%ExcelExportInstance%` · On error: continue | — |
+| → Then: Close browser | Close Browser on Fatal | Instance: `%Browser%` · On error: continue | — |
+| → Then: Close Excel | Save and Close Log | Save mode: Save document | — |
+| → Then: Stop flow | Stop Run - Fatal Error | (ends the run) | — |
+
+---
+
+**Step 3.11 — Get Pending Count**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Get Pending Count | `%PendingList.RowsCount%` | `PendingCount` (Number) |
+
+---
+
+**Step 3.12 — Initialize Loop Counter**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Set variable | Initialize Current Index | `%0%` | `CurrentIndex` (Number) |
+
+---
+
+**Step 3.13 — Close Export Excel Instance**
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Close Excel | Close Export Excel | Instance: `%ExcelExportInstance%` · Save mode: Don't save | — |
+
+> Closed **before** delete (Step 3.15) — the export file may still be locked by Excel automation while the instance holds it open.
+
+---
+
+**Step 3.14 — Check for Empty List**
+
+Place a **Label** action named `Phase6CleanupStart` at the top of Phase 6's detailed design (built next) — this branch's "Then" jumps there directly, and it is also the fall-through entry point Phase 4's loop reaches on normal completion.
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| If | Check Pending Count Zero | First operand: `%PendingCount%` · Operator: `Equal to` · Second operand: `%0%` | branch |
+| → Then: Set variable | Set Log Fields - No Pending Items | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `No items` · `LogReason` = `No pending items - run complete` | — |
+| → Then: Run subflow | Log - No Pending Items | Run subflow `WriteLogRow` | — |
+| → Then: Delete file(s) | Delete Export File (Empty List) | File(s): `%ExportFilePath%` · On error: continue | — |
+| → Then: Go to | Jump to Cleanup | Label: `Phase6CleanupStart` | — |
+
+> The empty-list branch deletes the export file too (best-effort, same as Step 3.15) — a 0-row export left behind would otherwise accumulate on every empty run, since this branch never reaches Step 3.15.
+
+---
+
+**Step 3.15 — Delete Export File** *(only reached if `PendingCount > 0`; best-effort)*
+
+| Action | Display Name | Properties | Output |
+|---|---|---|---|
+| Delete file(s) | Delete Export File | File(s): `%ExportFilePath%` · On error: continue | — |
+
+> Best-effort / on-error-continue: `PendingList` is already read into memory, so a delete failure (e.g., file briefly locked by antivirus) doesn't block the run — it just risks one leftover export file, a housekeeping concern, not a run failure. Not separately logged as a warning here to avoid an extra Log* global juggling mid-transition into Phase 4; if leftover exports become a real problem in practice, add a warning row.
+
+> **Step 3.15 is the last action of Phase 3.** Flow falls through to Phase 4 (Process Pending Requests Loop) with `PendingList`, `PendingCount`, and `CurrentIndex` populated.
+
+### Variables Declared / Used in This Section
+
+| Variable | Type | Scope | Default / Source |
+|---|---|---|---|
+| `ExportFilePath` | Text | Global | Already set in Phase 1 (Step 1.6) |
+| `RetryCount` | Number | Global | Reset to `%0%` at Steps 3.0 and 3.4 (reused global — see reference 8.1) |
+| `FileWaitCount` | Number | Global | Set `%0%` in Step 3.5 (retry target), fresh on every export attempt |
+| `ExcelExportInstance` | Excel instance | Global | Step 3.8; closed Step 3.13 |
+| `PendingList` | Datatable | Global | Step 3.9 |
+| `PendingCount` | Number | Global | Step 3.11 |
+| `CurrentIndex` | Number | Global | Initialized `%0%` in Step 3.12; used/incremented in Phase 4 |
+
+### Notes for Implementation
+- **Two independent retry blocks, one shared counter:** grid navigation (3.1) and export/download (3.5–3.7) each get their own `RetryCount` reset immediately before their own label — see reference 8.1. Do not skip either reset.
+- **Two Excel instances alive at once during this phase:** `ExcelLogInstance` (open since Phase 1, stays open) and `ExcelExportInstance` (opened Step 3.8, closed Step 3.13). Don't confuse which instance an action targets — a `WriteLogRow` call must always target `ExcelLogInstance`.
+- **Open assumptions carried from PROGRESS.md** still unresolved by this phase: exact admin-grid navigation path (Step 3.1), and whether a filter step (Step 3.3) is even needed. Both are flagged inline above and should be confirmed against the live Concur UI before implementation.
+- The poll loop (Step 3.6) bounds itself by `TimeoutSeconds`, one second per iteration — for a longer expected download time, consider a distinct `DownloadTimeoutSeconds` config value rather than overloading `TimeoutSeconds` (currently used for web-element waits elsewhere). Flagged as a possible future config split, not changed here to avoid scope creep on this phase.
