@@ -192,16 +192,13 @@ Reading the file can succeed but return an **empty** value; and a config field c
 
 | Action | Display Name | Properties | Output |
 |---|---|---|---|
-| Set variable | Compute Config Invalid Flag | `%ConcurBaseUrl = "" OR CredentialFilePath = "" OR LogFolderPath = "" OR ExportFolderPath = "" OR AdminPassword = ""%` | `ConfigInvalid` (Boolean) |
-| If | Check Config Invalid | First operand: `%ConfigInvalid%` · Operator: `Equal to` · Second operand: `%True%` | branch |
+| If | Check Config Not Empty | `%ConcurBaseUrl%` is empty OR `%CredentialFilePath%` is empty OR `%LogFolderPath%` is empty OR `%ExportFolderPath%` is empty OR `%AdminPassword%` is empty | branch |
 | → Then: Set variable | Set Log Fields - Config Invalid | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Config error - a required setting or credential is blank` | — |
 | → Then: Run subflow | Log Fatal - Config Invalid | Run subflow `WriteLogRow` | — |
 | → Then: Close Excel | Save and Close Log | Save mode: Save document | — |
 | → Then: Stop flow | Stop Run - Config Error | (ends the run) | — |
 
-> **Single-condition-`If` pattern (see reference 4.4 / Lessons Learned L1):** PA Desktop's `If` takes only **one** condition — there is no reliable "OR of 5 things" in one `If`. So the OR is precomputed into a single Boolean (`ConfigInvalid`) with one `Set variable`, and the `If` just tests that flag. The fatal-handling body is written **once**, under the flag test.
->
-> **Fallback if the inline `OR` expression won't evaluate:** initialize `ConfigInvalid = %False%`, then five plain single-condition `If`s (`%ConcurBaseUrl%` `is empty` → Set `ConfigInvalid = %True%`, one per field), then the same flag test. More verbose, but every action is a single-condition `If` — builds on any version.
+> **Verified in PA Desktop (see reference 4.4 ✅):** the `If` action's built-in condition list supports multiple `is empty` conditions combined by `OR`, added directly in the action UI — no precomputed Boolean needed. An earlier draft of this step tried to precompute the OR into a Boolean via `Set variable` (e.g. `%ConcurBaseUrl = "" OR ...%`); that failed live ("value cannot be empty" on the `Set variable` action) and has been dropped. See Lessons Learned L1 for the corrected rule.
 >
 > The log is already open (Step 1.9) so a config-error row can be written before aborting — satisfies the PDD requirement that every run leaves at least one log entry.
 
@@ -285,7 +282,6 @@ Steps 1.10–1.12 sit inside an **"On block error"** handler. Both branches set 
 | `AdminPassword` | Text (Sensitive) | Global | Step 1.10 |
 | `Browser` | Browser instance | Global | Step 1.11 |
 | `RetryCount` | Number | Global | Init `%0%` in Step 1.10c; incremented in error handler |
-| `ConfigInvalid` | Boolean | Global | Step 1.10b — precomputed OR-of-empties flag |
 | `LogUserID` / `LogRequestID` / `LogOutcome` / `LogReason` | Text | Global | Set by callers of `WriteLogRow` |
 
 ### Notes for Implementation
@@ -454,8 +450,7 @@ Sits inside an **"On block error"** handler wrapping Launch Excel (3.8) and Read
 
 | Action | Display Name | Properties | Output |
 |---|---|---|---|
-| Set variable | Compute Bad Headers Flag | `%PendingList.Columns.Contains("User ID") = False OR PendingList.Columns.Contains("Request ID") = False%` | `BadHeaders` (Boolean) |
-| If | Check Bad Export Headers | First operand: `%BadHeaders%` · Operator: `Equal to` · Second operand: `%True%` | branch |
+| If | Check Required Columns Present | `%PendingList.Columns%` does not contain `User ID` OR `%PendingList.Columns%` does not contain `Request ID` | branch |
 | → Then: Set variable | Set Log Fields - Bad Export Headers | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Export file missing expected columns (User ID / Request ID) - path: %ExportFilePath%` | — |
 | → Then: Run subflow | Log Fatal - Bad Export Headers | Run subflow `WriteLogRow` | — |
 | → Then: Close Excel | Close Export Excel on Fatal | Instance: `%ExcelExportInstance%` · On error: continue | — |
@@ -463,9 +458,9 @@ Sits inside an **"On block error"** handler wrapping Launch Excel (3.8) and Read
 | → Then: Close Excel | Save and Close Log | Save mode: Save document | — |
 | → Then: Stop flow | Stop Run - Fatal Error | (ends the run) | — |
 
-> **Single-condition-`If` pattern (see reference 4.4 / Lessons Learned L1):** same as Step 1.10b — the two-way OR is precomputed into one Boolean (`BadHeaders`) so the `If` tests a single flag and the fatal body is written once.
+> **Verified in PA Desktop (see reference 4.4 ✅):** same mechanism confirmed at Step 1.10b — the `If` action's condition list supports multiple conditions combined by `OR` directly, no precomputed Boolean needed (an earlier draft here tried that; dropped for the same reason as 1.10b — see Lessons Learned L1).
 >
-> **Two things still unverified here** (both flagged in `pa-desktop-reference.md`): (a) the inline `OR` / `=` Boolean-expression operators (reference 1.7); and (b) the Datatable `.Columns.Contains(...)` membership test itself (reference 7.4 only covers `.RowsCount`). If `.Columns.Contains` isn't a real PA Desktop expression, the fallback is to read the header row of Step 3.9's range explicitly and compare cell values. Confirm both live before build.
+> **Still unverified:** the `%PendingList.Columns%` `does not contain` membership test on a Datatable's column list (reference 7.4 only covers `.RowsCount`, not column-name lookups). If PA Desktop has no such operator/expression, the fallback is to read the header row of Step 3.9's range explicitly and compare cell values. Confirm live before build.
 
 ---
 
@@ -531,7 +526,6 @@ Place a **Label** action named `Phase6CleanupStart` at the top of Phase 6's deta
 | `ExcelExportInstance` | Excel instance | Global | Step 3.8; closed Step 3.13 |
 | `PendingList` | Datatable | Global | Step 3.9 |
 | `PendingCount` | Number | Global | Step 3.11 |
-| `BadHeaders` | Boolean | Global | Step 3.10 — precomputed OR-of-missing-columns flag |
 | `CurrentIndex` | Number | Global | Initialized `%0%` in Step 3.12; used/incremented in Phase 4 |
 
 ### Notes for Implementation
