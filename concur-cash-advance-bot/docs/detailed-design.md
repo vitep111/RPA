@@ -44,8 +44,8 @@ Appends one row to the rolling daily Excel log. Built once, called everywhere.
 
 | Global variable | Meaning |
 |---|---|
-| `LogUserID` | User being processed (empty for run-level rows) |
-| `LogRequestID` | Request ID/Name (empty for run-level rows) |
+| `LogUserID` | User being processed (`N/A` for run-level rows — see note below) |
+| `LogRequestID` | Request ID/Name (`N/A` for run-level rows — see note below) |
 | `LogOutcome` | "Submitted" / "Skipped" / "Failed" / "Fatal" / "No items" / "Run Summary" |
 | `LogReason` | Human-readable detail |
 | `RunTimestamp` | Set once in Phase 1; used as the RunID column |
@@ -68,6 +68,8 @@ Appends one row to the rolling daily Excel log. Built once, called everywhere.
 > **Why single-cell writes:** "Write to Excel worksheet" writes to **one cell**. Passing a list to a single cell writes its text form (`["Timestamp", ...]`) into that one cell rather than spreading across columns. Each column is written individually.
 >
 > **Caller pattern:** every call site does — `Set variable LogUserID` → `Set variable LogRequestID` → `Set variable LogOutcome` → `Set variable LogReason` → `Run subflow WriteLogRow`.
+>
+> **Verified in PA Desktop (see reference 1.8 ✅):** `Set variable`'s Value field cannot be left blank — the action errors ("parameter value can't be empty") if you try. So a run-level log row (no specific user/request — Fatal aborts, "No items", "Run Summary") cannot set `LogUserID`/`LogRequestID` to a true empty string; every call site sets them to the literal `N/A` instead. This shows up as the text "N/A" in the User ID / Request ID columns for run-level rows, which is also more explicit for anyone reading the log than a blank cell would be.
 >
 > **UiPath portability note:** UiPath forbids Invoke Workflow, so there this becomes a reusable **named Sequence** inlined in Main, and the globals become normal UiPath variables passed by scope. Logic is identical.
 
@@ -193,7 +195,7 @@ Reading the file can succeed but return an **empty** value; and a config field c
 | Action | Display Name | Properties | Output |
 |---|---|---|---|
 | If | Check Config Not Empty | `%ConcurBaseUrl%` is empty OR `%CredentialFilePath%` is empty OR `%LogFolderPath%` is empty OR `%ExportFolderPath%` is empty OR `%AdminPassword%` is empty | branch |
-| → Then: Set variable | Set Log Fields - Config Invalid | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Config error - a required setting or credential is blank` | — |
+| → Then: Set variable | Set Log Fields - Config Invalid | `LogUserID` = `N/A` · `LogRequestID` = `N/A` · `LogOutcome` = `Fatal` · `LogReason` = `Config error - a required setting or credential is blank` | — |
 | → Then: Run subflow | Log Fatal - Config Invalid | Run subflow `WriteLogRow` | — |
 | → Then: Close Excel | Save and Close Log | Save mode: Save document | — |
 | → Then: Stop flow | Stop Run - Config Error | (ends the run) | — |
@@ -240,7 +242,7 @@ Steps 1.10–1.12 sit inside an **"On block error"** handler. Both branches set 
 
 | Action | Display Name | Properties |
 |---|---|---|
-| Set variable | Set Log Fields - Credential Fail | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Credential file missing or unreadable` |
+| Set variable | Set Log Fields - Credential Fail | `LogUserID` = `N/A` · `LogRequestID` = `N/A` · `LogOutcome` = `Fatal` · `LogReason` = `Credential file missing or unreadable` |
 | Run subflow | Log Fatal - Credential Read Failed | Run subflow `WriteLogRow` |
 | Close Excel | Save and Close Log | Save mode: Save document |
 | Stop flow | Stop Run - Fatal Error | (ends the run) |
@@ -254,7 +256,7 @@ Steps 1.10–1.12 sit inside an **"On block error"** handler. Both branches set 
 | → Then: Close browser | Close Failed Browser | Instance: `%Browser%` · On error: continue (best-effort — instance may be unset if launch itself failed) |
 | → Then: Wait | Wait Before Retry | Duration (seconds): `%RetryDelaySeconds%` |
 | → Then: Go to | Retry Browser Launch | Label: `RetryBrowserLaunch` (placed before Step 1.11) |
-| → Else: Set variable | Set Log Fields - Browser Fail | `LogOutcome` = `Fatal` · `LogReason` = `Browser/login page failed to load after retries` |
+| → Else: Set variable | Set Log Fields - Browser Fail | `LogUserID` = `N/A` · `LogRequestID` = `N/A` · `LogOutcome` = `Fatal` · `LogReason` = `Browser/login page failed to load after retries` |
 | → Else: Run subflow | Log Fatal - Browser Launch Failed | Run subflow `WriteLogRow` |
 | → Else: Close browser | Close Browser if Open | Instance: `%Browser%` · On error: continue (best-effort — may be unset if launch failed) |
 | → Else: Close Excel | Save and Close Log | Save mode: Save document |
@@ -349,7 +351,7 @@ Sits inside an **"On block error"** handler, same retry-then-fatal shape as Phas
 | If | Check Retry Count - Grid Nav | First operand: `%RetryCount%` · Operator: `Less than or equal to` · Second operand: `%MaxRetry%` |
 | → Then: Wait | Wait Before Retry - Grid Nav | Duration (seconds): `%RetryDelaySeconds%` |
 | → Then: Go to | Retry Pending Grid Nav | Label: `RetryPendingGridNav` |
-| → Else: Set variable | Set Log Fields - Grid Load Failed | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Admin pending grid failed to load after retries` |
+| → Else: Set variable | Set Log Fields - Grid Load Failed | `LogUserID` = `N/A` · `LogRequestID` = `N/A` · `LogOutcome` = `Fatal` · `LogReason` = `Admin pending grid failed to load after retries` |
 | → Else: Run subflow | Log Fatal - Grid Load Failed | Run subflow `WriteLogRow` |
 | → Else: Close browser | Close Browser on Fatal | Instance: `%Browser%` · On error: continue |
 | → Else: Close Excel | Save and Close Log | Save mode: Save document |
@@ -407,7 +409,7 @@ Sits inside an **"On block error"** handler wrapping Steps 3.5–3.7 (covers bot
 | If | Check Retry Count - Export | First operand: `%RetryCount%` · Operator: `Less than or equal to` · Second operand: `%MaxRetry%` |
 | → Then: Wait | Wait Before Retry - Export | Duration (seconds): `%RetryDelaySeconds%` |
 | → Then: Go to | Retry Export Click | Label: `RetryExportClick` |
-| → Else: Set variable | Set Log Fields - Export Failed | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Export to Excel failed or file never downloaded after retries` |
+| → Else: Set variable | Set Log Fields - Export Failed | `LogUserID` = `N/A` · `LogRequestID` = `N/A` · `LogOutcome` = `Fatal` · `LogReason` = `Export to Excel failed or file never downloaded after retries` |
 | → Else: Run subflow | Log Fatal - Export Failed | Run subflow `WriteLogRow` |
 | → Else: Close browser | Close Browser on Fatal | Instance: `%Browser%` · On error: continue |
 | → Else: Close Excel | Save and Close Log | Save mode: Save document |
@@ -437,7 +439,7 @@ Sits inside an **"On block error"** handler wrapping Launch Excel (3.8) and Read
 
 | Action | Display Name | Properties |
 |---|---|---|
-| Set variable | Set Log Fields - Export File Unreadable | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Export file unreadable - path: %ExportFilePath%` |
+| Set variable | Set Log Fields - Export File Unreadable | `LogUserID` = `N/A` · `LogRequestID` = `N/A` · `LogOutcome` = `Fatal` · `LogReason` = `Export file unreadable - path: %ExportFilePath%` |
 | Run subflow | Log Fatal - Export File Unreadable | Run subflow `WriteLogRow` |
 | Close Excel | Close Export Excel on Fatal | Instance: `%ExcelExportInstance%` · On error: continue |
 | Close browser | Close Browser on Fatal | Instance: `%Browser%` · On error: continue |
@@ -451,7 +453,7 @@ Sits inside an **"On block error"** handler wrapping Launch Excel (3.8) and Read
 | Action | Display Name | Properties | Output |
 |---|---|---|---|
 | If | Check Required Columns Present | `%PendingList.Columns%` does not contain `User ID` OR `%PendingList.Columns%` does not contain `Request ID` | branch |
-| → Then: Set variable | Set Log Fields - Bad Export Headers | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `Fatal` · `LogReason` = `Export file missing expected columns (User ID / Request ID) - path: %ExportFilePath%` | — |
+| → Then: Set variable | Set Log Fields - Bad Export Headers | `LogUserID` = `N/A` · `LogRequestID` = `N/A` · `LogOutcome` = `Fatal` · `LogReason` = `Export file missing expected columns (User ID / Request ID) - path: %ExportFilePath%` | — |
 | → Then: Run subflow | Log Fatal - Bad Export Headers | Run subflow `WriteLogRow` | — |
 | → Then: Close Excel | Close Export Excel on Fatal | Instance: `%ExcelExportInstance%` · On error: continue | — |
 | → Then: Close browser | Close Browser on Fatal | Instance: `%Browser%` · On error: continue | — |
@@ -497,7 +499,7 @@ Place a **Label** action named `Phase6CleanupStart` at the top of Phase 6's deta
 | Action | Display Name | Properties | Output |
 |---|---|---|---|
 | If | Check Pending Count Zero | First operand: `%PendingCount%` · Operator: `Equal to` · Second operand: `%0%` | branch |
-| → Then: Set variable | Set Log Fields - No Pending Items | `LogUserID` = (empty) · `LogRequestID` = (empty) · `LogOutcome` = `No items` · `LogReason` = `No pending items - run complete` | — |
+| → Then: Set variable | Set Log Fields - No Pending Items | `LogUserID` = `N/A` · `LogRequestID` = `N/A` · `LogOutcome` = `No items` · `LogReason` = `No pending items - run complete` | — |
 | → Then: Run subflow | Log - No Pending Items | Run subflow `WriteLogRow` | — |
 | → Then: Delete file(s) | Delete Export File (Empty List) | File(s): `%ExportFilePath%` · On error: continue | — |
 | → Then: Go to | Jump to Cleanup | Label: `Phase6CleanupStart` | — |
