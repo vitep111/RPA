@@ -22,6 +22,20 @@ These conventions apply to **every** step table in this document. They reflect h
 
 ---
 
+## Flow & Subflow Structure (decision)
+
+**Decision: one Main flow, one real subflow.**
+
+- **`Main`** contains all 6 phases **inline**, in physical top-to-bottom order (Phase 1 → 2 → 3 → 4 → 5 → 6). Each phase is a visually distinct block marked by a comment action reading `>> SECTION: <phase name>` (see each phase's "Section name (flow comment)" line) — a label, not a call. Retries within a phase use in-flow `Go to` + `Label` pairs (e.g., `RetryBrowserLaunch`, `RetryPendingGridNav`), and Phase 3's empty-list branch (Step 3.14) jumps forward to a `Phase6CleanupStart` label in a *different* phase's block. **This cross-phase jump is only legal because every phase lives in one Main flow** — this is *why* the phases live in Main rather than as separate subflows, not merely a style choice: PA Desktop's `Go to`/`Label` are assumed to be scoped to a single flow and unable to jump between a flow and a subflow. **Unverified (see reference 9.1):** confirm this scoping behavior live before relying on it further; if `Go to` somehow can cross flow/subflow boundaries, this section's rationale weakens but the structure itself (one Main, one subflow) still stands on the "no reuse benefit" grounds in the next two bullets.
+- **`WriteLogRow`** is the **only** actual subflow (`Run subflow` action). It is called from every phase via the global caller pattern (`Set LogUserID/LogRequestID/LogOutcome/LogReason` → `Run subflow WriteLogRow`) documented above.
+- **Phase 4's per-item loop body is also inline in Main**, not its own subflow — iterating by index (`Loop Condition` while `%CurrentIndex%` `Less than` `%PendingCount%`, reading the current row via `%PendingList[CurrentIndex]%` **before** incrementing `CurrentIndex` for the next pass — read-then-increment, so row 0 isn't skipped), consistent with Phase 3 already initializing `CurrentIndex` (Step 3.12) for exactly this purpose — not a `For each`, which would leave `CurrentIndex` unused/dead. **Unverified:** the exact datatable row-indexing syntax (`%PendingList[CurrentIndex]%` assumed) is not yet a confirmed PA Desktop rule — pin it down and add it to `pa-desktop-reference.md` (e.g., rule 7.5) when Phase 4's detailed design is written. Keeping the loop body inline (rather than a `ProcessOneItem` subflow) is deliberate, not an oversight: since subflows carry no parameters, a `ProcessOneItem` subflow would read/write the exact same globals (`CurrentRecord`, `CurrentUserID`, etc.) that an inline loop body would — same global surface, zero encapsulation gained — while adding one `Run subflow` call's overhead per item and one more place to keep the `Log*`/`RetryCount` global-reuse discipline (reference 8.1) straight. Keeping it inline also keeps the "On block error" per-item handler directly attached to the loop body, matching how Phase 1 and Phase 3's retry handlers are structured.
+
+**Why not more subflows in general:** every candidate subflow (Phase 3's grid-navigation, Phase 4's per-item logic, Phase 6's summary tally) would only be called from exactly one call site, so factoring it out buys no reuse — the one thing subflows are for here is exactly what `WriteLogRow` does: one piece of logic called from *many* call sites (every phase, every error branch). If a future phase needs the same non-trivial logic from two or more places, extract a subflow for it then, following `WriteLogRow`'s pattern (read globals in, no return value, caller sets globals first).
+
+**UiPath portability note:** UiPath has no such `Go to`/label restriction and supports real Invoke Workflow with argument passing, so a port would likely split each phase into its own workflow with proper in/out arguments instead of comment-delimited sections in one file — but the *logic* transfers directly; only the file/workflow boundaries change.
+
+---
+
 ## Shared Subflow: `WriteLogRow`
 
 Appends one row to the rolling daily Excel log. Built once, called everywhere.

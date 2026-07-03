@@ -74,6 +74,12 @@
 |---|---|---|---|
 | 8.1 | `RetryCount` is a single global reused across every retryable block in the flow | It is **not** auto-reset between blocks. Each new retryable section must explicitly `Set variable RetryCount = %0%` immediately before its own retry target label, otherwise a block that entered with a nonzero `RetryCount` (left over from an earlier retry elsewhere in the run) gets fewer retries than `MaxRetry` allows. | ⚠️ |
 
+## 9. `Go to` / `Label` Scope
+
+| # | Rule | Detail | Status |
+|---|---|---|---|
+| 9.1 | `Go to` + `Label` are scoped to a single flow | Assumed: a `Go to` action cannot jump into a `Label` that lives in a different flow/subflow — only within the same flow (Main, or within one subflow). This is the load-bearing assumption behind keeping all 6 phases inline in one Main flow (see detailed-design.md "Flow & Subflow Structure") rather than splitting each phase into its own subflow. | ⚠️ |
+
 ---
 
 ## Open items to verify in PA Desktop
@@ -84,5 +90,6 @@
 - 5.1 confirm off-by-one on the retry operator with a real failing case.
 - 7.1–7.4 loop/throw-error/datatable action names, exactly as PA Desktop labels them.
 - Datatable column-membership/"does not contain" expression (used in Phase 3 Step 3.10 header validation) — not yet a confirmed rule; may need stacked `If` blocks per 4.4 instead.
+- 9.1 whether `Go to`/`Label` really are flow-scoped — this is load-bearing for the one-Main-flow architecture decision; confirm before build.
 
 Add new rows here as they're discovered and tested.
