@@ -42,6 +42,7 @@ One `Main` flow holds all phases inline (comment-delimited `>> SECTION:` blocks)
 - Merge to `main` via a GitHub PR (`mcp__github__create_pull_request` → `mcp__github__merge_pull_request`), not a raw push, so there's a reviewable diff — except for small housekeeping changes (like repo config/skill cleanup) the user explicitly asks to commit directly.
 - Commit messages: explain *why*, not *what* — the diff already shows what changed.
 - Never push, merge, or force anything without the user's go-ahead for that specific action.
+- **Before every commit, run the `rpa-design-reviewer` agent on the staged changes first.** Default reviewer model is **Opus** (already set in the agent's frontmatter — don't override it to a smaller model to save time). Loop fix → re-review until PASS, same as the detailed-design review loop above, then commit. This applies to any commit touching `docs/`, not just a freshly-built phase — small edits (a wording fix, a variable rename) still go through the reviewer before being committed, since a small edit is exactly where a stale cross-reference or dangling variable slips in unnoticed.
 
 ## Docs map (per project, e.g. `concur-cash-advance-bot/docs/`)
 
