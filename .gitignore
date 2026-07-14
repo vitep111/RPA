@@ -39,6 +39,10 @@ Thumbs.db
 # Claude Code local settings
 .claude/settings.local.json
 
+# Skill installer restore target — regenerated each session from skills-lock.json.
+# The canonical tracked copy lives in .claude/skills/. Don't commit the generated one.
+.agents/
+
 # Logs
 *.log
 logs/
