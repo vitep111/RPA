@@ -2,6 +2,15 @@
 
 This repo holds RPA bot design/build work. Read this file first, every session, before doing anything else.
 
+## How we work on every project
+
+The repo **is** the workspace. Every project — `concur-cash-advance-bot/` is the template — lives as its own top-level folder, and all of its artifacts (PDD, designs, reference doc, progress file, and eventually the build) are created **inside that folder in this repo**, never in scratch space or only in chat.
+
+- **Claude Code is where we think out loud.** Use the conversation to ask questions, discuss options, and work through decisions. Nothing in chat is the deliverable — the files in the repo are.
+- **Confirmed work gets committed.** When a discussion reaches a conclusion or a phase/result is confirmed by the user, capture it in the appropriate repo file and commit it (per the Git workflow below), so the repo is always the durable record of what's been decided. Unconfirmed exploration stays in chat until the user confirms; don't commit half-decided drafts.
+- **A new project = a new top-level folder** mirroring the template's `docs/` layout (see Docs map). Start it the same way: Discovery → PDD, then the phased process, with a `PROGRESS.md` as its resume file from day one.
+- The result is that anyone (including a future session) can reconstruct the whole state of a project — decisions, rationale, open questions — from the committed files alone, exactly as the cash-advance project already works.
+
 ## Always resume from PROGRESS.md
 
 Before any work, read the active project's `docs/PROGRESS.md` (currently `concur-cash-advance-bot/docs/PROGRESS.md`). It states the current phase, what's confirmed, what's blocked, and what's next. Don't re-derive this from guessing at file contents — `PROGRESS.md` is the source of truth for where we are.
