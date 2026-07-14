@@ -16,12 +16,16 @@ The skill enforces a **phased process** (Discovery → High-Level Design → Med
 - Confirm **one sub-phase at a time** within Detailed Design — don't draft all 6 sub-phases and present them together.
 - If a phase is blocked on an external decision (e.g., login method), flag it explicitly, mark it blocked in `PROGRESS.md`, and keep designing the phases that don't depend on it.
 
-## Review loop for every detailed-design phase
+## Review loop — mandatory and automatic
 
-After building or editing **any** detailed-design phase, run the `rpa-design-reviewer` agent (`.claude/agents/rpa-design-reviewer.md`) against it before presenting it to the user for confirmation:
-- It checks **correctness** against `docs/pa-desktop-reference.md` and **completeness** against the medium-level design + PDD.
-- Loop **fix → re-review** until it returns a clean **PASS** (zero blockers/majors). Minors tied to still-unverified PA Desktop behavior can ship flagged inline, as long as a fallback is documented.
-- If the custom agent type isn't loaded mid-session, run the same review instructions via a `general-purpose` agent instead — don't skip the review.
+Running the `rpa-design-reviewer` agent (`.claude/agents/rpa-design-reviewer.md`) is **not optional and does not wait for the user to ask.** The moment you finish creating or editing **any new phase, sub-phase, or development step** — a detailed-design sub-phase, a medium/high-level phase, an implementation step, or any edit to a design/reference doc — you **automatically** run the reviewer against it, before you present anything to the user for confirmation and before you commit.
+
+- It checks **correctness** against the project's platform reference doc (e.g. `docs/pa-desktop-reference.md`, including its Lessons Learned) and **completeness** against the medium-level design + PDD.
+- **Loop `fix → re-review` until the reviewer returns a clean `PASS` with zero BLOCKERS and zero MAJOR items.** One review pass is not the loop — a `FAIL` means fix and re-run, every time, however many rounds it takes. Do not present or commit a phase that has not reached PASS.
+- The only findings allowed to remain under a PASS are **MINORS tied to still-unverified platform behavior**, and only when each is flagged inline in the design with a documented fallback.
+- **Never skip the review to save time or because a change looks trivial** — a small edit (a wording fix, a variable rename) is exactly where a stale cross-reference or dangling variable slips in. Default reviewer model is **Opus** (set in the agent's frontmatter); don't downgrade it.
+- If the custom agent type isn't loaded mid-session (custom agents load at session start), run the same review instructions via a `general-purpose` agent instead — don't skip the review.
+- Only after PASS do you present the phase to the user for confirmation, then commit.
 
 ## PA Desktop syntax — don't assume, verify
 
@@ -42,7 +46,7 @@ One `Main` flow holds all phases inline (comment-delimited `>> SECTION:` blocks)
 - Merge to `main` via a GitHub PR (`mcp__github__create_pull_request` → `mcp__github__merge_pull_request`), not a raw push, so there's a reviewable diff — except for small housekeeping changes (like repo config/skill cleanup) the user explicitly asks to commit directly.
 - Commit messages: explain *why*, not *what* — the diff already shows what changed.
 - Never push, merge, or force anything without the user's go-ahead for that specific action.
-- **Before every commit, run the `rpa-design-reviewer` agent on the staged changes first.** Default reviewer model is **Opus** (already set in the agent's frontmatter — don't override it to a smaller model to save time). Loop fix → re-review until PASS, same as the detailed-design review loop above, then commit. This applies to any commit touching `docs/`, not just a freshly-built phase — small edits (a wording fix, a variable rename) still go through the reviewer before being committed, since a small edit is exactly where a stale cross-reference or dangling variable slips in unnoticed.
+- **Before every commit, run the `rpa-design-reviewer` agent on the staged changes first.** Default reviewer model is **Opus** (already set in the agent's frontmatter — don't override it to a smaller model to save time). Loop fix → re-review until PASS, per the mandatory review loop above, then commit. This applies to any commit touching `docs/`, not just a freshly-built phase — small edits (a wording fix, a variable rename) still go through the reviewer before being committed, since a small edit is exactly where a stale cross-reference or dangling variable slips in unnoticed.
 
 ## Docs map (per project, e.g. `concur-cash-advance-bot/docs/`)
 
