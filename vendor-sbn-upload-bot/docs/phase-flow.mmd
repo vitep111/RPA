@@ -1,0 +1,15 @@
+graph TD
+    A[Phase 1: Initialize & Read Config] --> B[Phase 2: Extract Vendors from SAP<br/>enter criteria & execute]
+    B --> Bok{SAP step OK?}
+    Bok -->|No, after retries| ERR[Send Error Email & Stop]
+    Bok -->|Yes| Rec{Records found?<br/>SAP status message}
+    Rec -->|No 'no values found'| NP[Send 'Nothing to Process' Email]
+    Rec -->|Yes| Exp[Export grid to file] --> C[Phase 3: Map Data to SBN Template]
+    C --> D[Phase 4: Upload to SBN & Poll Status]
+    D --> Poll{Status settled?}
+    Poll -->|Queued| D
+    Poll -->|Timeout| E
+    Poll -->|Created Vendors / Errors Found| E[Phase 5: Send Summary Email & Cleanup]
+    NP --> F[End]
+    E --> F[End]
+    ERR --> F[End]
