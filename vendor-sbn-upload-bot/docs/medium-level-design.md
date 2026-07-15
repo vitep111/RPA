@@ -1,6 +1,6 @@
 # Medium-Level Design — Daily Vendor SBN Upload Bot
 
-**Platform:** UiPath (see `uipath-reference.md` for rules). **Status:** Medium-level design in progress — **Phase 1/6 confirmed; Phase 2/6 designed (awaiting user confirmation); Phases 3/6–6/6 not yet drafted.** Designed one logical phase at a time.
+**Platform:** UiPath (see `uipath-reference.md` for rules). **Status:** Medium-level design in progress — **Phases 1/6–2/6 confirmed; Phase 3/6 designed (awaiting user confirmation); Phases 4/6–6/6 not yet drafted.** Designed one logical phase at a time.
 
 Each section below designs one of the six phases from the confirmed high-level design: purpose/scope, key logical steps, variables/data structures, error handling, and an internal flow diagram. All six phases run inside `Main.xaml`, wrapped by the outer Try-Catch-Finally (reference P4).
 
@@ -76,7 +76,7 @@ graph TD
 
 ## Phase 2/6 — Extract Vendors from SAP
 
-**Status:** Awaiting user confirmation. **Approach: native UiPath SAP UI automation** (screen-by-screen, revised from the earlier `.vbs` approach — see PDD "SAP Extraction Approach"). **SAP login sub-step is BLOCKED** pending the credential/login-method decision (Open Item #2) — structure designed, mechanism deferred with fallbacks.
+**Status:** Confirmed by user. **Approach: native UiPath SAP UI automation** (screen-by-screen, revised from the earlier `.vbs` approach — see PDD "SAP Extraction Approach"). **SAP login sub-step is BLOCKED** pending the credential/login-method decision (Open Item #2) — structure designed, mechanism deferred with fallbacks.
 
 ### Purpose & scope
 Establish a logged-in SAP session, drive SE16N/LFA1 with UI activities to list vendors created on `RunDate`, detect the empty-day case by reading the SAP status bar, export the grid to a file, and hand a validated export file to Phase 3 — all under retry so a transient SAP hiccup doesn't fail the run. Both "records exported" and "no values found" are **successful** outcomes of this phase; only technical failure (SAP won't open, login fails, navigation/export error) is an error, and after `MaxRetry` it propagates to the outer Catch (→ error email; Finally closes SAP).
@@ -153,4 +153,72 @@ graph TD
     CMP --> TOP{EmptyResultFlag?}
     TOP -->|Yes| TOP5[→ Phase 5 'nothing to process']
     TOP -->|No| TOP3[→ Phase 3]
+```
+
+---
+
+## Phase 3/6 — Map Data to SBN Template
+
+**Status:** Awaiting user confirmation. Reached only when Phase 2 found records (`EmptyResultFlag = False`).
+
+### Purpose & scope
+Turn the SAP export into the upload artifact: read the exported vendor rows, produce a CSV that exactly matches the **SBN-fixed template** (headers + order), copy the six fields across unchanged, generate the **minute-unique upload name once**, capture the **vendor count and IDs** for the summary email, and save the dated CSV for Phase 4. No transformation and no business validation of values — blanks pass through and, if SBN rejects them, that surfaces as "Errors Found" in Phase 4 (reported, not pre-checked).
+
+### Mapping approach (template-driven)
+The output CSV's columns come **from the SBN template file**, not hardcoded: read the template's header row and build the output structure from it, so the file always matches whatever SBN currently expects (the SBN page also offers "Download latest template version"). Refreshing `TemplatePath` handles **reordered or renamed** headers automatically; a genuinely **new required SBN column** also needs a new source↔target mapping added below (the pairs are still per-name). Each mapped SBN column is filled from its LFA1 source column — a **straight copy**.
+
+The exact source↔target column pairs are **TBC** (Open Items #3 SBN headers, #4 LFA1 source columns):
+
+| SBN column (from template) | LFA1 source column | Note |
+|---|---|---|
+| Vendor Name | `NAME1` (TBC) | direct copy |
+| Vendor ID | `LIFNR` (TBC) | direct copy |
+| Tax ID | `STCD1` (TBC) | direct copy — confirm which tax field (STCD1 vs STCEG/VAT) |
+| City | `ORT01` (TBC) | direct copy |
+| Country | `LAND1` (TBC) | direct copy — confirm SBN wants code vs. name (PDD says no transformation, so template presumably takes the code) |
+| Email | **source TBC** | ⚠️ **LFA1 has no native email field** — email lives in the address (ADRC/ADR6). Confirm how it appears in your SE16N LFA1 view/export (appended address field or custom view) before build. |
+
+*(Column names above are placeholders to be replaced from the real template + a sample SE16N export.)*
+
+### Key logical steps
+1. **Log "Phase 3 started"** (Info).
+2. **Read the SAP export** — `Read Range` inside a `Use Excel File` scope on `ExportPath` (an `.xlsx` Spreadsheet export) → `sapData` (DataTable). (Already validated non-empty in Phase 2.) The scope self-closes on exit (⚠️ U4; stray-Excel fallback in Phase 6).
+3. **Read the SBN template headers** — read `TemplatePath`'s header row → build `sbnData` (DataTable) with those columns, in template order.
+4. **Map rows** — `For Each Row` in `sapData`: create an `sbnData` row, assign each SBN column from its mapped `sapData` source column (straight copy per the mapping table). Add to `sbnData`.
+5. **Capture email facts** — `VendorCount = sapData.Rows.Count`; `VendorIDs` = the list of Vendor ID values (for the Phase 5 email).
+6. **Generate the upload name (once)** — `UploadName = "RPA_Upload_" + Now.ToString("ddMMyyyy_HHmm")`. Used for both the CSV filename and the Phase 4 SBN upload Name (single source, can't diverge).
+7. **Build the CSV path** — `CSVFilePath = Path.Combine(configDict("CSVOutputFolder"), UploadName + ".csv")`.
+8. **Write the CSV** — `Write CSV` `sbnData` → `CSVFilePath`, with the SBN-required delimiter/encoding (⚠️ U8 — confirm comma + encoding/quoting against a known-good SBN file; fallback: match the byte format — delimiter, encoding, line endings — of a manually-exported working SBN file exactly).
+9. **Validate output** — confirm `CSVFilePath` exists; `VendorCount ≥ 1`.
+10. **Log "Phase 3 completed"** (Info) → continue to **Phase 4**.
+
+### Variables / data structures
+| Name | Type | Scope | Initial | Purpose |
+|---|---|---|---|---|
+| `sapData` | DataTable | Main | — | Rows read from the SAP export |
+| `sbnData` | DataTable | Main | — | Output table, columns built from the SBN template |
+| `VendorCount` | Int32 | Main | — | Row count — for the Phase 5 email + output validation |
+| `VendorIDs` | List(Of String) | Main | — | Vendor ID list — for the Phase 5 email |
+| `UploadName` | String | Main | — | `RPA_Upload_ddMMyyyy_HHmm`, generated once; reused as CSV filename + SBN upload Name |
+| `CSVFilePath` | String | Main | — | Full path of the saved dated CSV |
+
+Consumes from earlier phases: `configDict` (`ExportPath`, `TemplatePath`, `CSVOutputFolder`), a validated `ExportPath` file. Produces for Phase 4: `CSVFilePath`, `UploadName`. Produces for Phase 5: `VendorCount`, `VendorIDs`, `UploadName`, `CSVFilePath` (attachment).
+
+### Error handling
+- No dedicated retry — mapping is deterministic; a failure (export unreadable/locked, template missing, a mapped source column not found, CSV write fails) is **not** self-healing, so it propagates to the outer Catch → error email; Finally (Phase 6) cleans up. A missing mapped source column throws a descriptive error (`"Expected source column <name> not found in SAP export"`).
+- **No value validation** — per the PDD there are no business rules; blank/edge values are copied as-is and any SBN rejection is captured as "Errors Found" in Phase 4.
+
+### Internal flow
+```mermaid
+graph TD
+    Q1[Log 'Phase 3 started'] --> Q2[Read SAP export → sapData]
+    Q2 --> Q3[Read SBN template headers → build sbnData columns]
+    Q3 --> Q4[For each sapData row: copy 6 mapped fields → sbnData]
+    Q4 --> Q5[VendorCount = rows; VendorIDs = list]
+    Q5 --> Q6[UploadName = RPA_Upload_ + Now ddMMyyyy_HHmm]
+    Q6 --> Q7[CSVFilePath = CSVOutputFolder + UploadName + .csv]
+    Q7 --> Q8[Write CSV sbnData → CSVFilePath]
+    Q8 --> Q9{CSV exists & VendorCount >= 1?}
+    Q9 -->|No| THROW3[Throw → outer Catch → error email]
+    Q9 -->|Yes| Q10[Log 'Phase 3 completed'] --> NEXT3[→ Phase 4]
 ```

@@ -30,8 +30,8 @@ All wrapped in an outer Try-Catch-**Finally**.
 - [x] Phase 2 — High-Level Design (confirmed by user; reviewer PASS. Six phases + outer Try-Catch-Finally.)
 - [~] Phase 3 — Medium-Level Design (in progress)
   - [x] Phase 1/6 — Initialize & Read Config (CONFIRMED by user. Reviewer PASS.)
-  - [~] Phase 2/6 — Extract Vendors from SAP (**REVISED to native UiPath SAP UI automation** — no `.vbs`; empty-day check = direct SE16N status-bar read; export via System→List→Export→Spreadsheet. Retired reference rules U1/U6 (.vbs invoke + result-token contract), added U7 (SAP ALV export) + P5 (SAP UI pattern); removed `VBSPath` config key. **SAP login sub-step BLOCKED** pending credential method (Open Item #2). Reviewer PASS after the switch (cross-doc `.vbs` sweep clean). Awaiting user confirmation.)
-  - [ ] Phase 3/6 — Map Data to SBN Template
+  - [x] Phase 2/6 — Extract Vendors from SAP (CONFIRMED by user. Native UiPath SAP UI automation; empty-day = direct SE16N status-bar read; export via menu. **SAP login sub-step BLOCKED** pending credential method (Open Item #2). Reviewer PASS.)
+  - [x] Phase 3/6 — Map Data to SBN Template (reviewer PASS — template-driven columns, straight copy of 6 fields, upload name generated once from `Now`, captures VendorCount/VendorIDs, writes dated CSV. Added ⚠️ U8 (SBN CSV format). **Flagged: LFA1 has no native email field** — exact source of the Email column is TBC (Open Item #4); source column names are placeholders pending real template + sample export. Awaiting user confirmation.)
   - [ ] Phase 4/6 — Upload to SBN & Poll Status
   - [ ] Phase 5/6 — Send Summary Email
   - [ ] Phase 6/6 — Cleanup

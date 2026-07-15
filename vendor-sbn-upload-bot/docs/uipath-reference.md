@@ -37,6 +37,7 @@ Source of truth for how this bot is built in UiPath. The reviewer checks the des
 - **U5 — SAP create-date filter format.** The value UiPath types into SE16N's LFA1 create-date (ERDAT) field is locale-dependent (SAP display format, e.g. `dd.MM.yyyy` vs `MM/dd/yyyy`) and must match the SAP user's date format. Unverified until tested live. Fallback: confirm the format from a manual SE16N run and set it explicitly; keep it a Config value if it varies by environment.
 - **U6 — RETIRED.** (Was: `.vbs`→UiPath result-token file contract.) No longer needed — UiPath reads the SAP status bar directly (U2) and drives the export itself (U7), so there is no cross-boundary result file. Kept as a placeholder so later U-numbers don't shift.
 - **U7 — SAP ALV export to local file via UiPath.** Exporting the SE16N result grid to `ExportPath` by driving the SAP menu (System → List → Export → Local File → Spreadsheet, or the toolbar export button) with UI activities — exact menu path, the file-format dialog, and overwrite/replace handling to be confirmed live. Fallback: alternate export format (e.g. text/`.xls`) or read the ALV grid directly.
+- **U8 — SBN CSV format specifics.** The output CSV must match what SBN's uploader accepts: field delimiter (assumed comma), text encoding (e.g. UTF-8), quoting/escaping of values containing commas, and whether a header row is required. To be confirmed against a known-good SBN template/sample. Fallback: match the byte format of a manually-exported working file exactly (delimiter, encoding, line endings).
 
 ## Lessons Learned
 
