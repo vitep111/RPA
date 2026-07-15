@@ -12,7 +12,7 @@ Start logging ("Bot started"), read `Config.xlsx` (Name/Value) into the config D
 
 ### Phase 2 — Extract Vendors from SAP
 1. **Log into SAP GUI** (open SAP Logon / establish the session).
-2. Drive SAP with **native UiPath SAP UI automation**: open **SQVI**, run the pre-built query (**LFA1 ⋈ ADRC**, so email is included), enter the **create-date = today** filter, and execute.
+2. Drive SAP with **native UiPath SAP UI automation**: open **SQVI**, run the pre-built query (**LFA1 ⋈ ADRC ⋈ ADR6**, so email is included), enter the **create-date = today** filter, and execute.
 3. **Read the SAP status bar** — the SQVI query shows a "No values were found" (no-records) message when nothing matches. This is the **empty-day check**: if no records, set the empty flag and skip straight to Phase 5's "nothing to process" email (no export, no mapping).
 4. If records exist, **export the result grid to a file** (System → List → Export → Spreadsheet) to the configured export path; confirm the export file was produced.
 

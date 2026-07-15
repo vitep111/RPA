@@ -80,7 +80,7 @@ graph TD
 **Status:** Awaiting re-confirmation (revised SE16N→SQVI). **Approach: native UiPath SAP UI automation** (screen-by-screen, revised from the earlier `.vbs` approach — see PDD "SAP Extraction Approach"). **SAP login sub-step is BLOCKED** pending the credential/login-method decision (Open Item #2) — structure designed, mechanism deferred with fallbacks.
 
 ### Purpose & scope
-Establish a logged-in SAP session, drive **SQVI** with UI activities to run the pre-built query (LFA1 ⋈ ADRC, so email is included) for vendors created on `RunDate`, detect the empty-day case by reading the SAP status bar, export the grid to a file, and hand a validated export file to Phase 3 — all under retry so a transient SAP hiccup doesn't fail the run. Both "records exported" and "no values found" are **successful** outcomes of this phase; only technical failure (SAP won't open, login fails, navigation/export error) is an error, and after `MaxRetry` it propagates to the outer Catch (→ error email; Finally closes SAP).
+Establish a logged-in SAP session, drive **SQVI** with UI activities to run the pre-built query (LFA1 ⋈ ADRC ⋈ ADR6, so email is included) for vendors created on `RunDate`, detect the empty-day case by reading the SAP status bar, export the grid to a file, and hand a validated export file to Phase 3 — all under retry so a transient SAP hiccup doesn't fail the run. Both "records exported" and "no values found" are **successful** outcomes of this phase; only technical failure (SAP won't open, login fails, navigation/export error) is an error, and after `MaxRetry` it propagates to the outer Catch (→ error email; Finally closes SAP).
 
 **Prerequisite:** the SQVI query (`SAPQueryName`) must exist and be runnable by the bot's SAP user (SQVI queries are user-specific — see PDD Prerequisites). If the query is not found for the login user, this phase fails on navigation → error email.
 
@@ -179,28 +179,36 @@ The exact source↔target column pairs are **TBC** (Open Items #3 SBN headers, #
 | Tax ID | `STCD1` (LFA1) (TBC) | direct copy — confirm which tax field (STCD1 vs STCEG/VAT) |
 | City | `ORT01` (LFA1) (TBC) | direct copy |
 | Country | `LAND1` (LFA1) (TBC) | direct copy — confirm SBN wants code vs. name (PDD says no transformation, so template presumably takes the code) |
-| Email | `SMTP_ADDR` (ADRC) (TBC) | direct copy — resolved via the SQVI LFA1 ⋈ ADRC join (LFA1.ADRNR → ADRC.ADDRNUMBER) |
+| Email | `SMTP_ADDR` (ADR6, `FLGDEFAULT='X'`) (TBC) | one email per vendor via the query's **default-email filter**; email lives in ADR6 (the SMTP table), joined `LFA1.ADRNR → ADR6.ADDRNUMBER` |
 
-*(Column names above are placeholders to be replaced from the real SBN template + a sample SQVI export. Note: a vendor with multiple ADRC email rows could fan out to >1 row per vendor — confirm the query returns one row per vendor.)*
+*(Column names above are placeholders to be replaced from the real SBN template + a sample SQVI export.)*
+
+### Multi-email handling (one email per vendor)
+Some vendors have **multiple emails** in ADR6, but SBN's file has a single email field. Resolution:
+- **Primary (query-side):** the SQVI query filters email to SAP's **default/standard address** (`ADR6.FLGDEFAULT = 'X'`), so it returns **one row per vendor** — the SAP-designated primary email. No transformation, works for existing vendors.
+- **Join must be OUTER** so a vendor with **no default-flagged email** still comes through with a **blank** email rather than being dropped from the extract (an inner join would silently lose that vendor). A blank email is uploaded as-is and SBN reports it under "Errors Found" (surfaced in the Phase 5 email) — consistent with the no-pre-validation rule. *(These are query-design points for the built query — see PDD Prerequisites.)*
+- **Safety net (bot-side):** Phase 3 still **de-duplicates by Vendor ID** (step 3 below), keeping one row per vendor, so the CSV can never fan out even if the query returns a stray duplicate.
 
 ### Key logical steps
 1. **Log "Phase 3 started"** (Info).
 2. **Read the SAP export** — `Read Range` inside a `Use Excel File` scope on `ExportPath` (an `.xlsx` Spreadsheet export) → `sapData` (DataTable). (Already validated non-empty in Phase 2.) The scope self-closes on exit (⚠️ U4; stray-Excel fallback in Phase 6).
-3. **Read the SBN template headers** — read `TemplatePath`'s header row → build `sbnData` (DataTable) with those columns, in template order.
-4. **Map rows** — `For Each Row` in `sapData`: create an `sbnData` row, assign each SBN column from its mapped `sapData` source column (straight copy per the mapping table). Add to `sbnData`.
-5. **Capture email facts** — `VendorCount = sapData.Rows.Count`; `VendorIDs` = the list of Vendor ID values (for the Phase 5 email).
-6. **Generate the upload name (once)** — `UploadName = "RPA_Upload_" + Now.ToString("ddMMyyyy_HHmm")`. Used for both the CSV filename and the Phase 4 SBN upload Name (single source, can't diverge).
-7. **Build the CSV path** — `CSVFilePath = Path.Combine(configDict("CSVOutputFolder"), UploadName + ".csv")`.
-8. **Write the CSV** — `Write CSV` `sbnData` → `CSVFilePath`, with the SBN-required delimiter/encoding (⚠️ U8 — confirm comma + encoding/quoting against a known-good SBN file; fallback: match the byte format — delimiter, encoding, line endings — of a manually-exported working SBN file exactly).
-9. **Validate output** — confirm `CSVFilePath` exists; `VendorCount ≥ 1`.
-10. **Log "Phase 3 completed"** (Info) → continue to **Phase 4**.
+3. **De-duplicate to one row per vendor (safety net)** — if any Vendor ID appears more than once in `sapData`, collapse to a single row per Vendor ID (prefer a **non-blank email**, else the first row — the export carries only the six fields, so `FLGDEFAULT` isn't available as a tie-break here; the default-email selection happens query-side) → `vendorData`. Log a Warning with the collapsed count if any duplicates were found. (The query's default-email filter should already yield one row per vendor; this guards against a stray duplicate.)
+4. **Read the SBN template headers** — read `TemplatePath`'s header row → build `sbnData` (DataTable) with those columns, in template order.
+5. **Map rows** — `For Each Row` in `vendorData`: create an `sbnData` row, assign each SBN column from its mapped source column (straight copy per the mapping table). Add to `sbnData`.
+6. **Capture email facts** — `VendorCount = vendorData.Rows.Count` (post-dedup, one per vendor); `VendorIDs` = the list of Vendor ID values (for the Phase 5 email).
+7. **Generate the upload name (once)** — `UploadName = "RPA_Upload_" + Now.ToString("ddMMyyyy_HHmm")`. Used for both the CSV filename and the Phase 4 SBN upload Name (single source, can't diverge).
+8. **Build the CSV path** — `CSVFilePath = Path.Combine(configDict("CSVOutputFolder"), UploadName + ".csv")`.
+9. **Write the CSV** — `Write CSV` `sbnData` → `CSVFilePath`, with the SBN-required delimiter/encoding (⚠️ U8 — confirm comma + encoding/quoting against a known-good SBN file; fallback: match the byte format — delimiter, encoding, line endings — of a manually-exported working SBN file exactly).
+10. **Validate output** — confirm `CSVFilePath` exists; `VendorCount ≥ 1`.
+11. **Log "Phase 3 completed"** (Info) → continue to **Phase 4**.
 
 ### Variables / data structures
 | Name | Type | Scope | Initial | Purpose |
 |---|---|---|---|---|
 | `sapData` | DataTable | Main | — | Rows read from the SAP export |
+| `vendorData` | DataTable | Main | — | `sapData` after de-dup to one row per Vendor ID |
 | `sbnData` | DataTable | Main | — | Output table, columns built from the SBN template |
-| `VendorCount` | Int32 | Main | — | Row count — for the Phase 5 email + output validation |
+| `VendorCount` | Int32 | Main | — | Deduped vendor count — for the Phase 5 email + output validation |
 | `VendorIDs` | List(Of String) | Main | — | Vendor ID list — for the Phase 5 email |
 | `UploadName` | String | Main | — | `RPA_Upload_ddMMyyyy_HHmm`, generated once; reused as CSV filename + SBN upload Name |
 | `CSVFilePath` | String | Main | — | Full path of the saved dated CSV |
@@ -209,15 +217,17 @@ Consumes from earlier phases: `configDict` (`ExportPath`, `TemplatePath`, `CSVOu
 
 ### Error handling
 - No dedicated retry — mapping is deterministic; a failure (export unreadable/locked, template missing, a mapped source column not found, CSV write fails) is **not** self-healing, so it propagates to the outer Catch → error email; Finally (Phase 6) cleans up. A missing mapped source column throws a descriptive error (`"Expected source column <name> not found in SAP export"`).
-- **No value validation** — per the PDD there are no business rules; blank/edge values are copied as-is and any SBN rejection is captured as "Errors Found" in Phase 4.
+- **No value validation** — per the PDD there are no business rules; blank/edge values (including a **blank email** for a vendor with no default-flagged address) are copied as-is and any SBN rejection is captured as "Errors Found" in Phase 4. A blank email is **not** a bot failure.
+- **De-dup is non-fatal** — collapsing duplicate Vendor IDs logs a Warning, not an error; the run continues with one row per vendor.
 
 ### Internal flow
 ```mermaid
 graph TD
     Q1[Log 'Phase 3 started'] --> Q2[Read SAP export → sapData]
-    Q2 --> Q3[Read SBN template headers → build sbnData columns]
-    Q3 --> Q4[For each sapData row: copy 6 mapped fields → sbnData]
-    Q4 --> Q5[VendorCount = rows; VendorIDs = list]
+    Q2 --> Q2b[De-dup by Vendor ID → vendorData<br/>keep 1/vendor; Warn if collapsed]
+    Q2b --> Q3[Read SBN template headers → build sbnData columns]
+    Q3 --> Q4[For each vendorData row: copy 6 mapped fields → sbnData]
+    Q4 --> Q5[VendorCount = deduped rows; VendorIDs = list]
     Q5 --> Q6[UploadName = RPA_Upload_ + Now ddMMyyyy_HHmm]
     Q6 --> Q7[CSVFilePath = CSVOutputFolder + UploadName + .csv]
     Q7 --> Q8[Write CSV sbnData → CSVFilePath]

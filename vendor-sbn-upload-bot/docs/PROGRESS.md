@@ -7,7 +7,7 @@
 
 ## Platform decision
 - **UiPath** (confirmed by process characteristics; awaiting explicit user sign-off with the PDD).
-- Rationale: SAP GUI automation (SQVI query over LFA1 ⋈ ADRC), retry/exception handling, and the SBN status-polling loop — none of which suit PA Desktop.
+- Rationale: SAP GUI automation (SQVI query over LFA1 ⋈ ADRC ⋈ ADR6), retry/exception handling, and the SBN status-polling loop — none of which suit PA Desktop.
 - UiPath hard constraints apply: linear nested Sequences only, Dictionary for structured data, no Invoke Workflow (all in Main.xaml), Config.xlsx at startup, Verb+Object naming, Windows project.
 
 ## Working model
@@ -30,8 +30,8 @@ All wrapped in an outer Try-Catch-**Finally**.
 - [x] Phase 2 — High-Level Design (confirmed by user; reviewer PASS. Six phases + outer Try-Catch-Finally.)
 - [~] Phase 3 — Medium-Level Design (in progress)
   - [x] Phase 1/6 — Initialize & Read Config (CONFIRMED by user. Reviewer PASS.)
-  - [~] Phase 2/6 — Extract Vendors from SAP (**REVISED: extraction transaction SE16N → SQVI** query joining LFA1 ⋈ ADRC, so email is included. Native UiPath SAP UI automation; empty-day = direct SAP status-bar read; export via menu. Added config key `SAPQueryName`, reference ⚠️ U9 (SQVI navigation). **SAP login sub-step BLOCKED** pending credential method (Open Item #2). Re-review after SQVI switch. Awaiting user re-confirmation.)
-  - [~] Phase 3/6 — Map Data to SBN Template (template-driven columns, straight copy of 6 fields, upload name generated once from `Now`, captures VendorCount/VendorIDs, writes dated CSV. ⚠️ U8 (SBN CSV format). **Email source RESOLVED** — now ADRC `SMTP_ADDR` via the SQVI join (was flagged as absent in LFA1); source columns are SQVI query outputs, names TBC (Open Item #4). Flagged: confirm the query returns one row per vendor (multi-email fan-out). Awaiting user confirmation.)
+  - [~] Phase 2/6 — Extract Vendors from SAP (**REVISED: extraction transaction SE16N → SQVI** query joining LFA1 ⋈ ADRC ⋈ ADR6, so email is included. Native UiPath SAP UI automation; empty-day = direct SAP status-bar read; export via menu. Added config key `SAPQueryName`, reference ⚠️ U9 (SQVI navigation). **SAP login sub-step BLOCKED** pending credential method (Open Item #2). Re-review after SQVI switch. Awaiting user re-confirmation.)
+  - [~] Phase 3/6 — Map Data to SBN Template (template-driven columns, straight copy of 6 fields, upload name generated once from `Now`, captures VendorCount/VendorIDs, writes dated CSV. ⚠️ U8 (SBN CSV format). **Email source** = ADR6 `SMTP_ADDR` (SMTP table; ADRC is postal), names TBC (Open Item #4). **Multi-email handled:** query filters to default email (`ADR6.FLGDEFAULT='X'`) → 1/vendor, OUTER join so no-default vendors come through blank (SBN flags), + bot-side dedup by Vendor ID as safety net; blank email is non-fatal. Awaiting user confirmation.)
   - [ ] Phase 4/6 — Upload to SBN & Poll Status
   - [ ] Phase 5/6 — Send Summary Email
   - [ ] Phase 6/6 — Cleanup
@@ -42,7 +42,7 @@ All wrapped in an outer Try-Catch-**Finally**.
 
 ## Key facts captured (from Discovery)
 - **Process:** daily extract of newly-created vendors from SAP → map to SBN CSV → upload to SAP Business Network → summary email.
-- **Extraction:** SAP **GUI**, transaction **SQVI** (revised from SE16N/LFA1) — a pre-built **query joining LFA1 ⋈ ADRC** so vendor **email** (held in ADRC, absent from LFA1) is included; filtered on **Create date = today**; result grid **exported to file**. **DECIDED (revised):** **native UiPath SAP UI automation, screen-by-screen** (UiPath.UIAutomation.Activities), NOT a `.vbs` script — chosen for maintainability. SAP GUI Scripting is **enabled** (required for UiPath's SAP selectors either way). Empty-day check = read SAP status bar directly in UiPath. **Prerequisite:** the SQVI query must be built by the business and accessible to the bot's SAP user (SQVI queries are user-specific).
+- **Extraction:** SAP **GUI**, transaction **SQVI** (revised from SE16N/LFA1) — a pre-built **query joining LFA1 ⋈ ADRC ⋈ ADR6** so vendor **email** (held in ADR6, absent from LFA1) is included; filtered on **Create date = today**; result grid **exported to file**. **DECIDED (revised):** **native UiPath SAP UI automation, screen-by-screen** (UiPath.UIAutomation.Activities), NOT a `.vbs` script — chosen for maintainability. SAP GUI Scripting is **enabled** (required for UiPath's SAP selectors either way). Empty-day check = read SAP status bar directly in UiPath. **Prerequisite:** the SQVI query must be built by the business and accessible to the bot's SAP user (SQVI queries are user-specific).
 - **Mapping:** **6 fields**, straight copy (no transformation): Vendor Name, Vendor ID, Tax ID, City, Country, Email. Target CSV layout is **fixed by SBN** (exact headers/order from user's template — user has the file).
 - **Upload (SBN web, "Upload Vendors" page, TEST MODE seen):** set **Name** = `RPA_Upload_ddMMyyyy_HHmm`, Choose File, leave **Perform AN Supplier Matching UNCHECKED** (one-way door), click **Upload**. New row appears in **Upload Details** table, matched by the unique Name.
 - **Empty-day check:** done in **Phase 2 (SAP step)** — the SQVI query shows a "no values were found" status-bar message after execute when no records match; bot branches to "nothing to process" email then, skipping export/mapping. (Vendor count/IDs still captured in Phase 3 for the email.)
@@ -56,6 +56,6 @@ All wrapped in an outer Try-Catch-**Finally**.
 2. Credential storage / login method for SAP and SBN (deferred by user).
 3. Exact SBN CSV header names/order (from user's template).
 4. Exact SQVI query output column names for the six mapped fields.
-5. SQVI query built (LFA1 ⋈ ADRC, 6 fields, create-date parameter) and accessible to the bot's SAP user.
+5. SQVI query built (LFA1 ⋈ ADRC ⋈ ADR6, 6 fields, create-date parameter) and accessible to the bot's SAP user.
 
 See `PDD.md` for the full Process Definition Document.
