@@ -10,13 +10,16 @@
 - Rationale: SAP GUI automation (SE16N/LFA1), retry/exception handling, and the SBN status-polling loop — none of which suit PA Desktop.
 - UiPath hard constraints apply: linear nested Sequences only, Dictionary for structured data, no Invoke Workflow (all in Main.xaml), Config.xlsx at startup, Verb+Object naming, Windows project.
 
+## Working model
+Working **directly on `main`** from now on (user instruction). Feature branch `claude/rpa-bot-development-t9ra41` was merged into main. `CLAUDE.md` governs: **mandatory automatic `rpa-design-reviewer` loop** on every new/edited phase and before every `docs/` commit — loop fix→re-review until PASS (zero BLOCKER/MAJOR). Reviewer's updated definition is generalized to any bot (UiPath or PA Desktop); run it via a `general-purpose` agent mid-session since custom agents only load at session start.
+
 ## Current phase
-**Phase 2: High-Level Design — written to `high-level-design.md`, awaiting user confirmation.**
-Five sequential phases + cross-cutting exception handling. Flow diagram also in `phase-flow.mmd`.
+**Phase 2: High-Level Design — reviewer PASS, awaiting user confirmation.**
+**Six** phases wrapped in an outer Try-Catch-**Finally** (Cleanup = Phase 6, always runs). Flow diagram in `phase-flow.mmd`.
 
 ## Phase status
 - [x] Phase 1 — Discovery (PDD confirmed by user)
-- [~] Phase 2 — High-Level Design (drafted; awaiting user "yes")
+- [~] Phase 2 — High-Level Design (reviewer PASS on 2nd pass — fixed: cleanup unreachable on empty-day/SAP-fail exits → moved to Phase 6 Finally; dated name generated once; explicit SAP login; diagram Try-Catch note. Awaiting user "yes".)
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design
 - [ ] Phase 5 — Full Design Review & sign-off

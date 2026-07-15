@@ -1,15 +1,19 @@
 graph TD
-    A[Phase 1: Initialize & Read Config] --> B[Phase 2: Extract Vendors from SAP<br/>enter criteria & execute]
+    A[Phase 1: Initialize & Read Config] --> B[Phase 2: Extract Vendors from SAP<br/>login, run .vbs, execute]
     B --> Bok{SAP step OK?}
-    Bok -->|No, after retries| ERR[Send Error Email & Stop]
+    Bok -->|No, after retries| CATCH[Catch: log + Send Error Email]
     Bok -->|Yes| Rec{Records found?<br/>SAP status message}
-    Rec -->|No 'no values found'| NP[Send 'Nothing to Process' Email]
+    Rec -->|No 'no values found'| NP[Phase 5: 'Nothing to Process' Email]
     Rec -->|Yes| Exp[Export grid to file] --> C[Phase 3: Map Data to SBN Template]
     C --> D[Phase 4: Upload to SBN & Poll Status]
     D --> Poll{Status settled?}
     Poll -->|Queued| D
     Poll -->|Timeout| E
-    Poll -->|Created Vendors / Errors Found| E[Phase 5: Send Summary Email & Cleanup]
-    NP --> F[End]
-    E --> F[End]
-    ERR --> F[End]
+    Poll -->|Created Vendors / Errors Found| E[Phase 5: Send Summary Email]
+    NP --> FIN
+    E --> FIN
+    CATCH --> FIN[Phase 6: Cleanup — Finally, always runs]
+    FIN --> F[End]
+
+    %% Note: an outer Try-Catch-Finally wraps Phases 1-5; a technical
+    %% failure in any phase routes to Catch, then Finally cleanup.
