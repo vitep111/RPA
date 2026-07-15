@@ -11,11 +11,11 @@
 - UiPath hard constraints apply: linear nested Sequences only, Dictionary for structured data, no Invoke Workflow (all in Main.xaml), Config.xlsx at startup, Verb+Object naming, Windows project.
 
 ## Current phase
-**Phase 1: Discovery — PDD written, awaiting user confirmation.**
+**Phase 2: High-Level Design — in progress (PDD confirmed).**
 
 ## Phase status
-- [~] Phase 1 — Discovery (PDD saved to `PDD.md`; awaiting user "yes")
-- [ ] Phase 2 — High-Level Design
+- [x] Phase 1 — Discovery (PDD confirmed by user)
+- [~] Phase 2 — High-Level Design
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design
 - [ ] Phase 5 — Full Design Review & sign-off
@@ -23,7 +23,7 @@
 
 ## Key facts captured (from Discovery)
 - **Process:** daily extract of newly-created vendors from SAP → map to SBN CSV → upload to SAP Business Network → summary email.
-- **Extraction:** SAP **GUI**, transaction **SE16N**, table **LFA1**, filtered on **Create date = today**; result grid **exported to Excel**.
+- **Extraction:** SAP **GUI**, transaction **SE16N**, table **LFA1**, filtered on **Create date = today**; result grid **exported to file**. **DECIDED:** SAP GUI Scripting is **enabled**; extraction uses a **parameterized recorded `.vbs`** invoked from UiPath (date + output path injected), not screen-by-screen native SAP activities. Runs via Invoke VBScript/Invoke Code, stays in Main.xaml.
 - **Mapping:** **6 fields**, straight copy (no transformation): Vendor Name, Vendor ID, Tax ID, City, Country, Email. Target CSV layout is **fixed by SBN** (exact headers/order from user's template — user has the file).
 - **Upload (SBN web, "Upload Vendors" page, TEST MODE seen):** set **Name** = `RPA_Upload_ddMMyyyy_HHmm`, Choose File, leave **Perform AN Supplier Matching UNCHECKED** (one-way door), click **Upload**. New row appears in **Upload Details** table, matched by the unique Name.
 - **Status:** click **Refresh Status**; statuses = **Created Vendors**, **Errors Found**, **Queued**. Wait while Queued; resolves in **seconds**. On Errors Found, report status only (no drill-in).

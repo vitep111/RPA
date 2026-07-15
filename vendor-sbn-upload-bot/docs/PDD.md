@@ -1,6 +1,6 @@
 # Process Definition Document — Daily Vendor SBN Upload Bot
 
-**Status:** Awaiting user confirmation (Phase 1).
+**Status:** Confirmed by user (Phase 1 complete).
 
 ## Process Overview
 Once per day the bot extracts vendor master records created that day from SAP (SE16N, table LFA1), maps six fields into the SBN-fixed CSV template, uploads that CSV to the SAP Business Network (SBN) web portal, polls the upload status until it resolves, and emails the team a summary with the CSV attached.
@@ -11,8 +11,8 @@ Scheduled — once per day (exact time TBC).
 ## Steps (Happy Path)
 1. Initialize — read Config.xlsx, start logging.
 2. Log into SAP GUI.
-3. Open SE16N → table **LFA1**, filter **Create date = today**, execute.
-4. Export the result grid to Excel.
+3. Run a parameterized **SAP GUI script (.vbs)** that opens SE16N → table **LFA1**, filters **Create date = today**, executes, and exports the result grid to a file. UiPath injects today's date and the output file path into the script before running it (Invoke VBScript / Invoke Code — stays inside Main.xaml).
+4. Pick up the exported file for mapping.
 5. Map six fields (Vendor Name, Vendor ID, Tax ID, City, Country, Email) into the SBN CSV template — straight copy, no transformation, into SBN's fixed headers/order.
 6. Save the CSV.
 7. Log into the SBN web portal → **Upload Vendors** page.
@@ -55,6 +55,9 @@ Six fields, direct copy from the LFA1 export → SBN CSV: Vendor Name, Vendor ID
 
 ## Platform
 **UiPath** — chosen for SAP GUI automation, retry/exception handling, and the status-polling loop. (PA Desktop ruled out: weak SAP GUI support, and the flow is not linear.)
+
+## SAP Extraction Approach (decided)
+**SAP GUI Scripting is enabled** in the environment. The SE16N/LFA1 extraction will use a **recorded, parameterized `.vbs` SAP GUI script** invoked from UiPath (rather than screen-by-screen native SAP activities), for reliability and speed on this deterministic export. UiPath injects the **run date** and **output file path** into the script, runs it via **Invoke VBScript/Invoke Code** (no separate .xaml — stays in Main.xaml), then reads the exported file. All other work (mapping, web upload, status polling, email, error handling) stays in UiPath.
 
 ## Open Items (TBC)
 1. Scheduled run time.
