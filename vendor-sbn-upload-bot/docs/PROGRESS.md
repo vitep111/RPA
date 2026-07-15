@@ -29,8 +29,8 @@ All wrapped in an outer Try-Catch-**Finally**.
 - [x] Phase 1 — Discovery (PDD confirmed by user)
 - [x] Phase 2 — High-Level Design (confirmed by user; reviewer PASS. Six phases + outer Try-Catch-Finally.)
 - [~] Phase 3 — Medium-Level Design (in progress)
-  - [x] Phase 1/6 — Initialize & Read Config (reviewer PASS on 2nd pass — fixed: bootstrap error-email paradox → added `FallbackErrorRecipient`; `RunDate` scoped to date-only/SE16N filter, upload-name `HHmm` from `Now` at Phase 3; flagged ⚠️ U4 Excel-scope auto-close. Awaiting user confirmation.)
-  - [ ] Phase 2/6 — Extract Vendors from SAP
+  - [x] Phase 1/6 — Initialize & Read Config (CONFIRMED by user. Reviewer PASS.)
+  - [x] Phase 2/6 — Extract Vendors from SAP (reviewer PASS — retry/empty-vs-failure clean; fixed diagram exception edge + DATA→validate ordering + missing-file-throw vs zero-row-empty. **SAP login sub-step BLOCKED** pending credential method (Open Item #2) — structure designed, mechanism deferred with fallbacks. Added config keys `SAPConnectionName`, `RetryDelaySeconds` to Phase 1 validated list; added ⚠️ U5 (SAP date format) + U6 (.vbs result-token contract). Awaiting user confirmation.)
   - [ ] Phase 3/6 — Map Data to SBN Template
   - [ ] Phase 4/6 — Upload to SBN & Poll Status
   - [ ] Phase 5/6 — Send Summary Email
