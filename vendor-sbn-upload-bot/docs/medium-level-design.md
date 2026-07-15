@@ -38,7 +38,6 @@ Prepare the run before any business work: begin logging, load `Config.xlsx` into
 ### Required Config keys (validated here; values are examples only, real values live in Config.xlsx)
 | Key | Used by | Example |
 |---|---|---|
-| `VBSPath` | Phase 2 | `.\scripts\extract_lfa1.vbs` |
 | `ExportPath` | Phase 2/3 | `.\data\lfa1_export.xlsx` |
 | `SAPConnectionName` | Phase 2 | `PRD [connection string]` |
 | `MaxRetry` | Phase 2 (P2) | `3` |
@@ -77,41 +76,36 @@ graph TD
 
 ## Phase 2/6 — Extract Vendors from SAP
 
-**Status:** Awaiting user confirmation. **SAP login sub-step is BLOCKED** pending the credential/login-method decision (Open Item #2) — structure designed, mechanism deferred with fallbacks.
+**Status:** Awaiting user confirmation. **Approach: native UiPath SAP UI automation** (screen-by-screen, revised from the earlier `.vbs` approach — see PDD "SAP Extraction Approach"). **SAP login sub-step is BLOCKED** pending the credential/login-method decision (Open Item #2) — structure designed, mechanism deferred with fallbacks.
 
 ### Purpose & scope
-Establish a logged-in SAP session, run the parameterized `.vbs` to extract LFA1 vendors created on `RunDate`, detect the empty-day case, and hand a validated export file to Phase 3 — all under retry so a transient SAP hiccup doesn't fail the run. Both "records exported" and "no values found" are **successful** outcomes of this phase; only technical failure (SAP won't open, login fails, script errors) is an error, and after `MaxRetry` it propagates to the outer Catch (→ error email; Finally closes SAP).
+Establish a logged-in SAP session, drive SE16N/LFA1 with UI activities to list vendors created on `RunDate`, detect the empty-day case by reading the SAP status bar, export the grid to a file, and hand a validated export file to Phase 3 — all under retry so a transient SAP hiccup doesn't fail the run. Both "records exported" and "no values found" are **successful** outcomes of this phase; only technical failure (SAP won't open, login fails, navigation/export error) is an error, and after `MaxRetry` it propagates to the outer Catch (→ error email; Finally closes SAP).
 
-### The `.vbs` ↔ UiPath contract (how empty vs. failure is told apart)
-Distinguishing "empty day" from "SAP failure" is the crux of this phase. The `.vbs` writes a **result token** to a result file (reference U6), and UiPath reads it after each run:
-- **`DATA`** — records found; the script exported the grid to `ExportPath`.
-- **`NODATA`** — SE16N showed "no values were found" (⚠️ U2); no export written.
-- **result file missing / any other value** — the script did not complete cleanly → treated as a **failure** (retry).
-
-This keeps the empty/failure decision on an explicit signal rather than guessing from file presence. Fallback if the status-bar read proves unreliable: infer `NODATA` from a zero-row export (U2).
+### How empty vs. failure is told apart
+Distinguishing "empty day" from "SAP failure" is the crux of this phase, and native automation makes it a **direct read**: after Execute, UiPath reads the SE16N **status bar** (reference P5, ⚠️ U2). If it shows the "no values were found" message → empty day (success). If the result grid is shown → export and proceed. Any exception during login/navigation/execute/export is a technical failure → retry. **Fallback (if the status-bar read proves unreliable at build):** switch to an always-export-then-count model — attempt the export unconditionally and treat a zero-row / no-export result as the empty case (U2). Note this changes the empty branch to route through the export+row-count path rather than skipping export.
 
 ### Key logical steps
 1. **Log "Phase 2 started"** (Info).
 2. **Reset retry counter** — `Assign retryCount = 0` (P2; the operative reset for this block).
-3. **Prepare inputs** — read `VBSPath`, `ExportPath`, `SAPConnectionName`, `MaxRetry`, `RetryDelaySeconds` from `configDict`; derive `resultFilePath` (same folder as `ExportPath`, fixed name e.g. `run_result.txt`); build `sapDateFilter` = `RunDate` formatted to the SAP display format (⚠️ U5).
+3. **Prepare inputs** — read `ExportPath`, `SAPConnectionName`, `MaxRetry`, `RetryDelaySeconds` from `configDict`; build `sapDateFilter` = `RunDate` formatted to the SAP display format (⚠️ U5).
 4. **Retry block** — `Do While retryCount < CInt(configDict("MaxRetry"))` wrapping a `Try Catch`:
    - **Try:**
-     1. **Ensure logged-in SAP session** for `SAPConnectionName`. **[BLOCKED — credential source + login mechanism TBC]** — placeholder: open SAP Logon if not running, connect to the system, supply credentials from the chosen secure source, confirm the session is ready. Fallbacks under consideration: login driven by UiPath SAP activities, or handled inside the `.vbs`, or SSO.
-     2. **Clear stale artifacts** — delete any previous-run `ExportPath` and `resultFilePath` so a leftover file can't be mistaken for this run's output.
-     3. **Run the `.vbs`** via `Invoke Code` / `Invoke VBScript` (reference ⚠️ U1), passing `sapDateFilter`, `ExportPath`, and `resultFilePath`. The script runs SE16N → LFA1 → enters the create-date filter → executes → writes the result token (and exports on `DATA`).
-     4. **Read the result token** — `Assign runResultToken = <contents of resultFilePath>` (⚠️ U2/U6).
-     5. **Interpret `runResultToken`:**
-        - `NODATA` → `Assign EmptyResultFlag = True`.
-        - `DATA` → validate `ExportPath`:
-          - file **missing** (contract violation) → **Throw** `"DATA token but export file missing"` → retry.
-          - file present with **≥1 data row** → proceed (records found).
-          - file present with **0 rows** → fall back to the empty path (`Assign EmptyResultFlag = True`) and log a Warning (U2).
-        - missing token / any other value → **Throw** `"SAP extraction failed (no valid result token)"` → retry.
-     6. **Exit the loop on success** — `Assign retryCount = CInt(configDict("MaxRetry"))` (both `DATA` and `NODATA` are success).
+     1. **Ensure logged-in SAP session** for `SAPConnectionName`. **[BLOCKED — credential source + login mechanism TBC]** — placeholder: open SAP Logon if not running, connect to the system, supply credentials from the chosen secure source, confirm the session is ready. Fallbacks under consideration: UiPath SAP login activities, or SSO.
+     2. **Open SE16N** — `Type Into` the SAP command field with the transaction code and confirm (P5); wait for the SE16N selection screen.
+     3. **Enter the table and filter** — enter table `LFA1`, then enter the create-date criterion `sapDateFilter` into the create-date (ERDAT) selection field (⚠️ U5 for the date format).
+     4. **Execute** — `Click` Execute / send `F8`; wait for either the result grid or a status-bar message.
+     5. **Read the status bar** — `Assign statusBarText = <Get Text of the SAP status bar>` (P5, ⚠️ U2).
+     6. **Decide empty vs. records:**
+        - `statusBarText` indicates **"no values were found"** → `Assign EmptyResultFlag = True`.
+        - else (**result grid shown**):
+          a. **Clear stale export** — delete any previous-run `ExportPath` so a leftover file can't be mistaken for this run's output.
+          b. **Export the grid** to `ExportPath` via System → List → Export → Spreadsheet, driven by UI activities (⚠️ U7).
+          c. **Validate `ExportPath`:** file **missing** → **Throw** `"SAP export file not produced"` → retry; file with **≥1 data row** → proceed (records found); file with **0 rows** (contradicts a non-empty grid) → fall back to the empty path (`Assign EmptyResultFlag = True`) + log a Warning (U2).
+     7. **Exit the loop on success** — `Assign retryCount = CInt(configDict("MaxRetry"))` (both empty and records are success).
    - **Catch ex:**
      1. `Assign retryCount = retryCount + 1`.
      2. If `retryCount >= CInt(configDict("MaxRetry"))` → `Log Message (Error)` with `ex.Message` + **Rethrow** (→ outer Catch → error email).
-     3. Else → `Delay` `RetryDelaySeconds`, then loop (the login step re-runs, recovering from a dropped session).
+     3. Else → `Delay` `RetryDelaySeconds`, then loop (the login/navigation steps re-run, recovering from a dropped session).
 5. **Branch on outcome:**
    - `EmptyResultFlag = True` → Log "No vendors created on <RunDate>" (Info) → route to **Phase 5** ("nothing to process" email), skipping Phases 3–4.
    - else → Log "Vendor export ready" (Info) → continue to **Phase 3**.
@@ -120,33 +114,32 @@ This keeps the empty/failure decision on an explicit signal rather than guessing
 ### Variables / data structures
 | Name | Type | Scope | Initial | Purpose |
 |---|---|---|---|---|
-| `resultFilePath` | String | Main | derived | Where the `.vbs` writes its result token |
 | `sapDateFilter` | String | Main | — | `RunDate` in SAP display format (⚠️ U5) for the ERDAT filter |
-| `runResultToken` | String | Main | — | Token read back from `resultFilePath` (`DATA`/`NODATA`/other) |
+| `statusBarText` | String | Main | — | SE16N status-bar text read after Execute (⚠️ U2), tested for the no-records message |
 | `retryCount` | Int32 | Main | reset to 0 here | Retry counter for this block (P2) |
-| `EmptyResultFlag` | Boolean | Main | (from Phase 1) | Set True here on `NODATA`; consumed in step 5 + Phase 5 |
+| `EmptyResultFlag` | Boolean | Main | (from Phase 1) | Set True here on no-records / zero-row; consumed in step 5 + Phase 5 |
 
 Consumes from Phase 1: `RunDate`, `configDict`, `retryCount`, `EmptyResultFlag`. Produces for Phase 3: a validated `ExportPath` file with ≥1 vendor row. Produces for Phase 5 (empty branch): `EmptyResultFlag`, `RunDate`.
 
 ### Error handling
-- **SAP won't open / login fails / script error / no valid token** → caught in the retry block; retried up to `MaxRetry` with a `RetryDelaySeconds` delay; on final failure logged (Error) and **Rethrown** to the outer Catch → error email; Finally (Phase 6) closes SAP.
-- **Empty day (`NODATA`)** → not an error; sets `EmptyResultFlag` and routes to Phase 5.
+- **SAP won't open / login fails / navigation or export error / export file missing** → caught in the retry block; retried up to `MaxRetry` with a `RetryDelaySeconds` delay; on final failure logged (Error) and **Rethrown** to the outer Catch → error email; Finally (Phase 6) closes SAP.
+- **Empty day (status bar "no values found")** → not an error; sets `EmptyResultFlag` and routes to Phase 5.
 - **Login is BLOCKED** — the exact credential retrieval and login mechanism is deferred (Open Item #2). The retry/exception structure around it is designed and won't change when the mechanism is chosen; only step 4.Try.1 gets filled in.
 
 ### Internal flow
 ```mermaid
 graph TD
     P1[Log 'Phase 2 started'] --> RST[Assign retryCount = 0]
-    RST --> PREP[Prepare VBSPath/ExportPath/resultFilePath/sapDateFilter]
+    RST --> PREP[Prepare ExportPath/SAPConnectionName/sapDateFilter]
     PREP --> LOOP{retryCount < MaxRetry?}
     LOOP -->|No| DONE
-    LOOP -->|Yes| TRY[Try: ensure SAP login BLOCKED -> clear stale files -> run .vbs -> read token]
-    TRY -->|exception thrown<br/>login/SAP/.vbs error| CATCH
-    TRY --> TOK{runResultToken?}
-    TOK -->|NODATA| EMPTY[EmptyResultFlag = True] --> EXIT[retryCount = MaxRetry]
-    TOK -->|DATA| VAL[Validate export file]
-    TOK -->|missing / other| THROWN[Throw → retry]
-    VAL -->|file missing| THROWN
+    LOOP -->|Yes| TRY[Try: ensure SAP login BLOCKED -> open SE16N -> enter LFA1 + date -> execute -> read status bar]
+    TRY -->|exception thrown<br/>login/SAP/nav/export error| CATCH
+    TRY --> STAT{Status bar =<br/>'no values found'?}
+    STAT -->|Yes| EMPTY[EmptyResultFlag = True] --> EXIT[retryCount = MaxRetry]
+    STAT -->|No, grid shown| EXP[Clear stale + export grid to file]
+    EXP --> VAL[Validate export file]
+    VAL -->|file missing| THROWN[Throw → retry]
     VAL -->|>= 1 row| EXIT
     VAL -->|0 rows| EMPTY
     THROWN --> CATCH[Catch: retryCount += 1]
@@ -155,6 +148,9 @@ graph TD
     LAST -->|No| DELAY[Delay RetryDelaySeconds] --> LOOP
     EXIT --> LOOP
     DONE{EmptyResultFlag?}
-    DONE -->|Yes| TOP5[→ Phase 5 'nothing to process']
-    DONE -->|No| TOP3[→ Phase 3]
+    DONE -->|Yes| LOGE[Log 'No vendors created'] --> CMP[Log 'Phase 2 completed']
+    DONE -->|No| LOGR[Log 'Vendor export ready'] --> CMP
+    CMP --> TOP{EmptyResultFlag?}
+    TOP -->|Yes| TOP5[→ Phase 5 'nothing to process']
+    TOP -->|No| TOP3[→ Phase 3]
 ```

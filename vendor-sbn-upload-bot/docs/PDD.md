@@ -11,7 +11,7 @@ Scheduled — once per day (exact time TBC).
 ## Steps (Happy Path)
 1. Initialize — read Config.xlsx, start logging.
 2. Log into SAP GUI.
-3. Run a parameterized **SAP GUI script (.vbs)** that opens SE16N → table **LFA1**, filters **Create date = today**, executes, and exports the result grid to a file. UiPath injects today's date and the output file path into the script before running it (Invoke VBScript / Invoke Code — stays inside Main.xaml).
+3. Drive SAP GUI screen-by-screen with **UiPath SAP UI automation**: open SE16N → table **LFA1**, enter **Create date = today**, execute, read the status bar for the no-records case, then export the result grid to a file (System → List → Export → Spreadsheet).
 4. Pick up the exported file for mapping.
 5. Map six fields (Vendor Name, Vendor ID, Tax ID, City, Country, Email) into the SBN CSV template — straight copy, no transformation, into SBN's fixed headers/order.
 6. Save the CSV.
@@ -57,7 +57,7 @@ Six fields, direct copy from the LFA1 export → SBN CSV: Vendor Name, Vendor ID
 **UiPath** — chosen for SAP GUI automation, retry/exception handling, and the status-polling loop. (PA Desktop ruled out: weak SAP GUI support, and the flow is not linear.)
 
 ## SAP Extraction Approach (decided)
-**SAP GUI Scripting is enabled** in the environment. The SE16N/LFA1 extraction will use a **recorded, parameterized `.vbs` SAP GUI script** invoked from UiPath (rather than screen-by-screen native SAP activities), for reliability and speed on this deterministic export. UiPath injects the **run date** and **output file path** into the script, runs it via **Invoke VBScript/Invoke Code** (no separate .xaml — stays in Main.xaml), then reads the exported file. All other work (mapping, web upload, status polling, email, error handling) stays in UiPath.
+**Native UiPath SAP UI automation, screen-by-screen** (revised from an earlier `.vbs`-scripting approach). **SAP GUI Scripting is enabled** in the environment — required for UiPath's SAP GUI selectors, which are built on the same scripting API. UiPath drives SE16N/LFA1 directly with UI activities (Type Into transaction code, enter table + create-date filter, execute, read the status bar for the empty case, export the grid to a file), then reads the exported file. Chosen for **maintainability**: all steps are visible and debuggable in Studio, no separate VBScript file and no `.vbs`↔UiPath result-file contract to maintain. Trade-off (a few more selectors, marginally slower) is negligible at this volume. All other work (mapping, web upload, status polling, email, error handling) stays in UiPath.
 
 ## Open Items (TBC)
 1. Scheduled run time.

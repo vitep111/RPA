@@ -18,23 +18,25 @@ Source of truth for how this bot is built in UiPath. The reviewer checks the des
 - **P2 — Retry block.** `Assign retryCount = 0` → `Do While retryCount < CInt(configDict("MaxRetry"))` → `Try Catch`: Try does the action then sets `retryCount = CInt(configDict("MaxRetry"))` to exit; Catch does `retryCount = retryCount + 1`, and if `retryCount >= MaxRetry` logs Error + `Rethrow`, else `Delay`. Any reused counter is reset before each independent retry block.
 - **P3 — Logging.** `Log Message` at: bot start (Info), each phase start/end (Info), each caught error (Error, includes `exception.Message`), bot end (Info).
 - **P4 — Outer Try-Catch-Finally.** `Main` wraps Phases 1–5 in a `Try`; `Catch (Exception)` logs Error + sends the error email; `Finally` runs Phase 6 Cleanup (close apps) so it executes on every exit path.
+- **P5 — SAP GUI UI automation.** Drive SAP GUI with `UiPath.UIAutomation.Activities` (SAP GUI Scripting enabled). Enter transaction codes via the command field (`Type Into`), fill selection fields, execute (`Click`/`F8`), and read results/status via SAP GUI selectors. Prefer stable SAP element IDs in selectors over screen coordinates. Wait for elements (`Element Exists` / reliable selectors) rather than fixed delays. Read the **status bar** element for messages (empty result, errors).
 
 ## Packages (expected)
 
 - `UiPath.Excel.Activities` — Config read, SAP export read, CSV write.
-- `UiPath.System.Activities` — core (Assign, If, Try Catch, Invoke Code/VBScript, Delay, logging).
+- `UiPath.System.Activities` — core (Assign, If, Try Catch, Delay, logging).
 - `UiPath.UIAutomation.Activities` — SBN web portal automation.
 - `UiPath.Mail.Activities` (or Outlook via `UiPath.MicrosoftOffice365` / SMTP) — summary/error email. (Exact mail mechanism TBC.)
-- SAP GUI automation: handled via the parameterized `.vbs` invoked with `Invoke Code`/`Invoke VBScript`; UiPath SAP activities not required for the extraction itself.
+- SAP GUI automation: handled via **`UiPath.UIAutomation.Activities`** driving the SAP GUI directly (SAP GUI Scripting must be enabled — UiPath's SAP selectors are built on it). No `.vbs`, no separate SAP package needed for GUI screen automation.
 
 ## Unverified platform behaviors (⚠️ — confirm before build)
 
-- **U1 — Invoke Code vs Invoke VBScript for the SAP `.vbs`.** Running the parameterized SAP GUI script from UiPath (passing in run date + output path) — exact activity and argument-passing mechanism to be confirmed. Fallback: write the parameters into the `.vbs` (or a params file) before running, or run via `Start Process`/`cscript`.
-- **U2 — SE16N "no values found" detection.** The empty-day check relies on reading SAP's status-bar message after execute. Whether this is surfaced to the `.vbs` (e.g. via the session status bar text) or must be inferred from an empty export file is to be confirmed. Fallback: treat a zero-row export as the empty case.
+- **U1 — RETIRED.** (Was: Invoke Code/VBScript for a SAP `.vbs`.) Superseded by native UiPath SAP UI automation — no `.vbs` is used. Kept as a placeholder so later U-numbers don't shift.
+- **U2 — SE16N "no values found" detection.** The empty-day check reads SAP's **status-bar text directly in UiPath** (`Get Text` on the status-bar element) after execute, and tests it for the no-records message. Exact message text and the status-bar selector to be confirmed live (⚠️ U5 governs any date in it). Fallback: treat a zero-row export as the empty case.
 - **U3 — SBN upload-row identification & status read.** Locating the just-created row by its unique Name and reading its Status cell via UI selectors — selector reliability to be confirmed against the live portal. Fallback: sort by Last Updated / anchor on the Name text.
 - **U4 — `Use Excel File` / `Excel Application Scope` auto-closes on exception.** The design assumes the Excel scope releases the workbook on both success and error (so Finally has nothing to close for the config read). Believed correct but unverified. Fallback: an explicit `Close Workbook` / kill stray Excel in Phase 6 cleanup.
-- **U5 — SAP create-date filter format in the `.vbs`.** The value written into SE16N's LFA1 create-date (ERDAT) field is locale-dependent (SAP display format, e.g. `dd.MM.yyyy` vs `MM/dd/yyyy`). The date string UiPath injects must match the SAP user's date format. Unverified until tested live. Fallback: confirm the format from a manual SE16N run and set it explicitly; keep it a Config value if it varies by environment.
-- **U6 — `.vbs`→UiPath result contract.** The design has the `.vbs` write a result token (`DATA` / `NODATA`) to a result file that UiPath reads back to distinguish "records exported" from "no values found" from "script failed" (missing/other). The interface (result-token file) is a UiPath-side contract we control; the `.vbs`-side reading of the SAP status bar to decide the token is the ⚠️ U2 part. Fallback: infer emptiness from a zero-row export (U2).
+- **U5 — SAP create-date filter format.** The value UiPath types into SE16N's LFA1 create-date (ERDAT) field is locale-dependent (SAP display format, e.g. `dd.MM.yyyy` vs `MM/dd/yyyy`) and must match the SAP user's date format. Unverified until tested live. Fallback: confirm the format from a manual SE16N run and set it explicitly; keep it a Config value if it varies by environment.
+- **U6 — RETIRED.** (Was: `.vbs`→UiPath result-token file contract.) No longer needed — UiPath reads the SAP status bar directly (U2) and drives the export itself (U7), so there is no cross-boundary result file. Kept as a placeholder so later U-numbers don't shift.
+- **U7 — SAP ALV export to local file via UiPath.** Exporting the SE16N result grid to `ExportPath` by driving the SAP menu (System → List → Export → Local File → Spreadsheet, or the toolbar export button) with UI activities — exact menu path, the file-format dialog, and overwrite/replace handling to be confirmed live. Fallback: alternate export format (e.g. text/`.xls`) or read the ALV grid directly.
 
 ## Lessons Learned
 

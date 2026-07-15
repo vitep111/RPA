@@ -30,7 +30,7 @@ All wrapped in an outer Try-Catch-**Finally**.
 - [x] Phase 2 — High-Level Design (confirmed by user; reviewer PASS. Six phases + outer Try-Catch-Finally.)
 - [~] Phase 3 — Medium-Level Design (in progress)
   - [x] Phase 1/6 — Initialize & Read Config (CONFIRMED by user. Reviewer PASS.)
-  - [x] Phase 2/6 — Extract Vendors from SAP (reviewer PASS — retry/empty-vs-failure clean; fixed diagram exception edge + DATA→validate ordering + missing-file-throw vs zero-row-empty. **SAP login sub-step BLOCKED** pending credential method (Open Item #2) — structure designed, mechanism deferred with fallbacks. Added config keys `SAPConnectionName`, `RetryDelaySeconds` to Phase 1 validated list; added ⚠️ U5 (SAP date format) + U6 (.vbs result-token contract). Awaiting user confirmation.)
+  - [~] Phase 2/6 — Extract Vendors from SAP (**REVISED to native UiPath SAP UI automation** — no `.vbs`; empty-day check = direct SE16N status-bar read; export via System→List→Export→Spreadsheet. Retired reference rules U1/U6 (.vbs invoke + result-token contract), added U7 (SAP ALV export) + P5 (SAP UI pattern); removed `VBSPath` config key. **SAP login sub-step BLOCKED** pending credential method (Open Item #2). Reviewer PASS after the switch (cross-doc `.vbs` sweep clean). Awaiting user confirmation.)
   - [ ] Phase 3/6 — Map Data to SBN Template
   - [ ] Phase 4/6 — Upload to SBN & Poll Status
   - [ ] Phase 5/6 — Send Summary Email
@@ -42,7 +42,7 @@ All wrapped in an outer Try-Catch-**Finally**.
 
 ## Key facts captured (from Discovery)
 - **Process:** daily extract of newly-created vendors from SAP → map to SBN CSV → upload to SAP Business Network → summary email.
-- **Extraction:** SAP **GUI**, transaction **SE16N**, table **LFA1**, filtered on **Create date = today**; result grid **exported to file**. **DECIDED:** SAP GUI Scripting is **enabled**; extraction uses a **parameterized recorded `.vbs`** invoked from UiPath (date + output path injected), not screen-by-screen native SAP activities. Runs via Invoke VBScript/Invoke Code, stays in Main.xaml.
+- **Extraction:** SAP **GUI**, transaction **SE16N**, table **LFA1**, filtered on **Create date = today**; result grid **exported to file**. **DECIDED (revised):** **native UiPath SAP UI automation, screen-by-screen** (UiPath.UIAutomation.Activities), NOT a `.vbs` script — chosen for maintainability (all steps visible/debuggable in Studio, no VBScript file, no result-file contract). SAP GUI Scripting is **enabled** (required for UiPath's SAP selectors either way). Empty-day check = read SE16N status bar directly in UiPath.
 - **Mapping:** **6 fields**, straight copy (no transformation): Vendor Name, Vendor ID, Tax ID, City, Country, Email. Target CSV layout is **fixed by SBN** (exact headers/order from user's template — user has the file).
 - **Upload (SBN web, "Upload Vendors" page, TEST MODE seen):** set **Name** = `RPA_Upload_ddMMyyyy_HHmm`, Choose File, leave **Perform AN Supplier Matching UNCHECKED** (one-way door), click **Upload**. New row appears in **Upload Details** table, matched by the unique Name.
 - **Empty-day check:** done in **Phase 2 (SAP step)** — SE16N shows a "no values were found" status-bar message after execute when no records match; bot branches to "nothing to process" email then, skipping export/mapping. (Vendor count/IDs still captured in Phase 3 for the email.)

@@ -1,5 +1,5 @@
 graph TD
-    A[Phase 1: Initialize & Read Config] --> B[Phase 2: Extract Vendors from SAP<br/>login, run .vbs, execute]
+    A[Phase 1: Initialize & Read Config] --> B[Phase 2: Extract Vendors from SAP<br/>login, open SE16N, execute]
     B --> Bok{SAP step OK?}
     Bok -->|No, after retries| CATCH[Catch: log + Send Error Email]
     Bok -->|Yes| Rec{Records found?<br/>SAP status message}
