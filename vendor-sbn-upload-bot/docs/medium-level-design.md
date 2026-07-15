@@ -1,6 +1,6 @@
 # Medium-Level Design — Daily Vendor SBN Upload Bot
 
-**Platform:** UiPath (see `uipath-reference.md` for rules). **Status:** Medium-level design in progress — **Phases 1/6–2/6 confirmed; Phase 3/6 designed (awaiting user confirmation); Phases 4/6–6/6 not yet drafted.** Designed one logical phase at a time.
+**Platform:** UiPath (see `uipath-reference.md` for rules). **Status:** Medium-level design in progress — **Phase 1/6 confirmed; Phases 2/6 (revised SE16N→SQVI) and 3/6 awaiting user confirmation; Phases 4/6–6/6 not yet drafted.** Designed one logical phase at a time.
 
 Each section below designs one of the six phases from the confirmed high-level design: purpose/scope, key logical steps, variables/data structures, error handling, and an internal flow diagram. All six phases run inside `Main.xaml`, wrapped by the outer Try-Catch-Finally (reference P4).
 
@@ -20,7 +20,7 @@ Prepare the run before any business work: begin logging, load `Config.xlsx` into
 4. **Read Config worksheet** — read the "Config" sheet (Name/Value) into `configTable` via a `Use Excel File` scope (reference P1); the scope self-closes on exit.
 5. **Populate configDict** — for each row, `configDict(Name) = Value`.
 6. **Validate required keys** — confirm every required key exists and is non-empty (list below). On any missing/blank key, raise a clear exception (→ outer Catch → error email).
-7. **Compute run date** — `RunDate = Today` (date-only). Used **only** for the SE16N create-date filter in Phase 2 and the `ddMMyyyy` date portion of the upload name. The upload name's `HHmm` timestamp is taken from `Now` at Phase 3 (not from `RunDate`), so the name stays minute-unique per run.
+7. **Compute run date** — `RunDate = Today` (date-only). Used **only** for the SQVI query's create-date filter in Phase 2 and the `ddMMyyyy` date portion of the upload name. The upload name's `HHmm` timestamp is taken from `Now` at Phase 3 (not from `RunDate`), so the name stays minute-unique per run.
 8. **Initialize control variables** — `EmptyResultFlag = False`. (`retryCount` is Main-scoped but the operative reset is per-retry-block in Phase 2 per P2 — the value set here is not relied upon.)
 9. **Log "Phase 1 completed"** (Info).
 
@@ -31,15 +31,16 @@ Prepare the run before any business work: begin logging, load `Config.xlsx` into
 | `FallbackErrorRecipient` | String | Main | `"<admin address>"` | Bootstrap literal — error-email recipient when `configDict` isn't populated |
 | `configTable` | DataTable | Main | — | Raw Config sheet read |
 | `configDict` | Dictionary(Of String, String) | Main | new | All settings, keyed by Name |
-| `RunDate` | DateTime | Main | `Today` | Date-only — SE16N create-date filter + `ddMMyyyy` portion of upload name (NOT the `HHmm`) |
-| `EmptyResultFlag` | Boolean | Main | `False` | Set true in Phase 2 if SE16N returns no rows |
+| `RunDate` | DateTime | Main | `Today` | Date-only — SQVI create-date filter + `ddMMyyyy` portion of upload name (NOT the `HHmm`) |
+| `EmptyResultFlag` | Boolean | Main | `False` | Set true in Phase 2 if the SQVI query returns no rows |
 | `retryCount` | Int32 | Main | `0` | Shared retry counter; operative reset is per-block in Phase 2 (reference P2) |
 
 ### Required Config keys (validated here; values are examples only, real values live in Config.xlsx)
 | Key | Used by | Example |
 |---|---|---|
-| `ExportPath` | Phase 2/3 | `.\data\lfa1_export.xlsx` |
+| `ExportPath` | Phase 2/3 | `.\data\vendor_export.xlsx` |
 | `SAPConnectionName` | Phase 2 | `PRD [connection string]` |
+| `SAPQueryName` | Phase 2 | `Z_VENDOR_EMAIL` (SQVI query name) |
 | `MaxRetry` | Phase 2 (P2) | `3` |
 | `RetryDelaySeconds` | Phase 2 (P2) | `10` |
 | `TemplatePath` | Phase 3 | `.\templates\SBN_template.csv` |
@@ -76,23 +77,25 @@ graph TD
 
 ## Phase 2/6 — Extract Vendors from SAP
 
-**Status:** Confirmed by user. **Approach: native UiPath SAP UI automation** (screen-by-screen, revised from the earlier `.vbs` approach — see PDD "SAP Extraction Approach"). **SAP login sub-step is BLOCKED** pending the credential/login-method decision (Open Item #2) — structure designed, mechanism deferred with fallbacks.
+**Status:** Awaiting re-confirmation (revised SE16N→SQVI). **Approach: native UiPath SAP UI automation** (screen-by-screen, revised from the earlier `.vbs` approach — see PDD "SAP Extraction Approach"). **SAP login sub-step is BLOCKED** pending the credential/login-method decision (Open Item #2) — structure designed, mechanism deferred with fallbacks.
 
 ### Purpose & scope
-Establish a logged-in SAP session, drive SE16N/LFA1 with UI activities to list vendors created on `RunDate`, detect the empty-day case by reading the SAP status bar, export the grid to a file, and hand a validated export file to Phase 3 — all under retry so a transient SAP hiccup doesn't fail the run. Both "records exported" and "no values found" are **successful** outcomes of this phase; only technical failure (SAP won't open, login fails, navigation/export error) is an error, and after `MaxRetry` it propagates to the outer Catch (→ error email; Finally closes SAP).
+Establish a logged-in SAP session, drive **SQVI** with UI activities to run the pre-built query (LFA1 ⋈ ADRC, so email is included) for vendors created on `RunDate`, detect the empty-day case by reading the SAP status bar, export the grid to a file, and hand a validated export file to Phase 3 — all under retry so a transient SAP hiccup doesn't fail the run. Both "records exported" and "no values found" are **successful** outcomes of this phase; only technical failure (SAP won't open, login fails, navigation/export error) is an error, and after `MaxRetry` it propagates to the outer Catch (→ error email; Finally closes SAP).
+
+**Prerequisite:** the SQVI query (`SAPQueryName`) must exist and be runnable by the bot's SAP user (SQVI queries are user-specific — see PDD Prerequisites). If the query is not found for the login user, this phase fails on navigation → error email.
 
 ### How empty vs. failure is told apart
-Distinguishing "empty day" from "SAP failure" is the crux of this phase, and native automation makes it a **direct read**: after Execute, UiPath reads the SE16N **status bar** (reference P5, ⚠️ U2). If it shows the "no values were found" message → empty day (success). If the result grid is shown → export and proceed. Any exception during login/navigation/execute/export is a technical failure → retry. **Fallback (if the status-bar read proves unreliable at build):** switch to an always-export-then-count model — attempt the export unconditionally and treat a zero-row / no-export result as the empty case (U2). Note this changes the empty branch to route through the export+row-count path rather than skipping export.
+Distinguishing "empty day" from "SAP failure" is the crux of this phase, and native automation makes it a **direct read**: after Execute, UiPath reads the SAP **status bar** (reference P5, ⚠️ U2). If it shows the "no values were found" message → empty day (success). If the result grid is shown → export and proceed. Any exception during login/navigation/execute/export is a technical failure → retry. **Fallback (if the status-bar read proves unreliable at build):** switch to an always-export-then-count model — attempt the export unconditionally and treat a zero-row / no-export result as the empty case (U2). Note this changes the empty branch to route through the export+row-count path rather than skipping export.
 
 ### Key logical steps
 1. **Log "Phase 2 started"** (Info).
 2. **Reset retry counter** — `Assign retryCount = 0` (P2; the operative reset for this block).
-3. **Prepare inputs** — read `ExportPath`, `SAPConnectionName`, `MaxRetry`, `RetryDelaySeconds` from `configDict`; build `sapDateFilter` = `RunDate` formatted to the SAP display format (⚠️ U5).
+3. **Prepare inputs** — read `ExportPath`, `SAPConnectionName`, `SAPQueryName`, `MaxRetry`, `RetryDelaySeconds` from `configDict`; build `sapDateFilter` = `RunDate` formatted to the SAP display format (⚠️ U5).
 4. **Retry block** — `Do While retryCount < CInt(configDict("MaxRetry"))` wrapping a `Try Catch`:
    - **Try:**
      1. **Ensure logged-in SAP session** for `SAPConnectionName`. **[BLOCKED — credential source + login mechanism TBC]** — placeholder: open SAP Logon if not running, connect to the system, supply credentials from the chosen secure source, confirm the session is ready. Fallbacks under consideration: UiPath SAP login activities, or SSO.
-     2. **Open SE16N** — `Type Into` the SAP command field with the transaction code and confirm (P5); wait for the SE16N selection screen.
-     3. **Enter the table and filter** — enter table `LFA1`, then enter the create-date criterion `sapDateFilter` into the create-date (ERDAT) selection field (⚠️ U5 for the date format).
+     2. **Open SQVI and select the query** — `Type Into` the SAP command field with the transaction code and confirm (P5); in SQVI, select the query named `SAPQueryName` and execute it to reach its selection screen (⚠️ U9 — exact SQVI navigation/selection to confirm live; fallback: run the query's generated program directly, or use a global InfoSet query the bot user can access). If the query isn't present for the login user, this throws → treated as a failure (surfaces the user-specific-query prerequisite).
+     3. **Enter the filter** — enter the create-date criterion `sapDateFilter` into the query's create-date (ERDAT) selection parameter (⚠️ U5 for the date format).
      4. **Execute** — `Click` Execute / send `F8`; wait for either the result grid or a status-bar message.
      5. **Read the status bar** — `Assign statusBarText = <Get Text of the SAP status bar>` (P5, ⚠️ U2).
      6. **Decide empty vs. records:**
@@ -115,7 +118,7 @@ Distinguishing "empty day" from "SAP failure" is the crux of this phase, and nat
 | Name | Type | Scope | Initial | Purpose |
 |---|---|---|---|---|
 | `sapDateFilter` | String | Main | — | `RunDate` in SAP display format (⚠️ U5) for the ERDAT filter |
-| `statusBarText` | String | Main | — | SE16N status-bar text read after Execute (⚠️ U2), tested for the no-records message |
+| `statusBarText` | String | Main | — | SAP status-bar text read after executing the SQVI query (⚠️ U2), tested for the no-records message |
 | `retryCount` | Int32 | Main | reset to 0 here | Retry counter for this block (P2) |
 | `EmptyResultFlag` | Boolean | Main | (from Phase 1) | Set True here on no-records / zero-row; consumed in step 5 + Phase 5 |
 
@@ -130,10 +133,10 @@ Consumes from Phase 1: `RunDate`, `configDict`, `retryCount`, `EmptyResultFlag`.
 ```mermaid
 graph TD
     P1[Log 'Phase 2 started'] --> RST[Assign retryCount = 0]
-    RST --> PREP[Prepare ExportPath/SAPConnectionName/sapDateFilter]
+    RST --> PREP[Prepare ExportPath/SAPConnectionName/SAPQueryName/sapDateFilter]
     PREP --> LOOP{retryCount < MaxRetry?}
     LOOP -->|No| DONE
-    LOOP -->|Yes| TRY[Try: ensure SAP login BLOCKED -> open SE16N -> enter LFA1 + date -> execute -> read status bar]
+    LOOP -->|Yes| TRY[Try: ensure SAP login BLOCKED -> open SQVI + select query -> enter date -> execute -> read status bar]
     TRY -->|exception thrown<br/>login/SAP/nav/export error| CATCH
     TRY --> STAT{Status bar =<br/>'no values found'?}
     STAT -->|Yes| EMPTY[EmptyResultFlag = True] --> EXIT[retryCount = MaxRetry]
@@ -165,20 +168,20 @@ graph TD
 Turn the SAP export into the upload artifact: read the exported vendor rows, produce a CSV that exactly matches the **SBN-fixed template** (headers + order), copy the six fields across unchanged, generate the **minute-unique upload name once**, capture the **vendor count and IDs** for the summary email, and save the dated CSV for Phase 4. No transformation and no business validation of values — blanks pass through and, if SBN rejects them, that surfaces as "Errors Found" in Phase 4 (reported, not pre-checked).
 
 ### Mapping approach (template-driven)
-The output CSV's columns come **from the SBN template file**, not hardcoded: read the template's header row and build the output structure from it, so the file always matches whatever SBN currently expects (the SBN page also offers "Download latest template version"). Refreshing `TemplatePath` handles **reordered or renamed** headers automatically; a genuinely **new required SBN column** also needs a new source↔target mapping added below (the pairs are still per-name). Each mapped SBN column is filled from its LFA1 source column — a **straight copy**.
+The output CSV's columns come **from the SBN template file**, not hardcoded: read the template's header row and build the output structure from it, so the file always matches whatever SBN currently expects (the SBN page also offers "Download latest template version"). Refreshing `TemplatePath` handles **reordered or renamed** headers automatically; a genuinely **new required SBN column** also needs a new source↔target mapping added below (the pairs are still per-name). Each mapped SBN column is filled from its **SQVI query output column** — a **straight copy**.
 
-The exact source↔target column pairs are **TBC** (Open Items #3 SBN headers, #4 LFA1 source columns):
+The exact source↔target column pairs are **TBC** (Open Items #3 SBN headers, #4 SQVI query output columns):
 
-| SBN column (from template) | LFA1 source column | Note |
+| SBN column (from template) | SQVI output column (underlying field) | Note |
 |---|---|---|
-| Vendor Name | `NAME1` (TBC) | direct copy |
-| Vendor ID | `LIFNR` (TBC) | direct copy |
-| Tax ID | `STCD1` (TBC) | direct copy — confirm which tax field (STCD1 vs STCEG/VAT) |
-| City | `ORT01` (TBC) | direct copy |
-| Country | `LAND1` (TBC) | direct copy — confirm SBN wants code vs. name (PDD says no transformation, so template presumably takes the code) |
-| Email | **source TBC** | ⚠️ **LFA1 has no native email field** — email lives in the address (ADRC/ADR6). Confirm how it appears in your SE16N LFA1 view/export (appended address field or custom view) before build. |
+| Vendor Name | `NAME1` (LFA1) (TBC) | direct copy |
+| Vendor ID | `LIFNR` (LFA1) (TBC) | direct copy |
+| Tax ID | `STCD1` (LFA1) (TBC) | direct copy — confirm which tax field (STCD1 vs STCEG/VAT) |
+| City | `ORT01` (LFA1) (TBC) | direct copy |
+| Country | `LAND1` (LFA1) (TBC) | direct copy — confirm SBN wants code vs. name (PDD says no transformation, so template presumably takes the code) |
+| Email | `SMTP_ADDR` (ADRC) (TBC) | direct copy — resolved via the SQVI LFA1 ⋈ ADRC join (LFA1.ADRNR → ADRC.ADDRNUMBER) |
 
-*(Column names above are placeholders to be replaced from the real template + a sample SE16N export.)*
+*(Column names above are placeholders to be replaced from the real SBN template + a sample SQVI export. Note: a vendor with multiple ADRC email rows could fan out to >1 row per vendor — confirm the query returns one row per vendor.)*
 
 ### Key logical steps
 1. **Log "Phase 3 started"** (Info).

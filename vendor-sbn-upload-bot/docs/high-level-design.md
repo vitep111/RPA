@@ -8,12 +8,12 @@ The process decomposes into **six phases** wrapped in a single outer **Try-Catch
 ## Phases
 
 ### Phase 1 — Initialize & Read Config
-Start logging ("Bot started"), read `Config.xlsx` (Name/Value) into the config Dictionary. Config holds: SAP connection name, export output path, SBN CSV template path, dated CSV output path, SBN portal URL, email recipients, retry count, retry delay, poll interval, poll timeout, and any environment-specific values. No business logic — just setup.
+Start logging ("Bot started"), read `Config.xlsx` (Name/Value) into the config Dictionary. Config holds: SAP connection name, SAP query name (SQVI), export output path, SBN CSV template path, dated CSV output path, SBN portal URL, email recipients, retry count, retry delay, poll interval, poll timeout, and any environment-specific values. No business logic — just setup.
 
 ### Phase 2 — Extract Vendors from SAP
 1. **Log into SAP GUI** (open SAP Logon / establish the session).
-2. Drive SAP with **native UiPath SAP UI automation**: open **SE16N**, enter table **LFA1** and the **create-date = today** filter, and execute.
-3. **Read the SAP status bar** — SE16N shows a "No values were found" (no-records) message when nothing matches. This is the **empty-day check**: if no records, set the empty flag and skip straight to Phase 5's "nothing to process" email (no export, no mapping).
+2. Drive SAP with **native UiPath SAP UI automation**: open **SQVI**, run the pre-built query (**LFA1 ⋈ ADRC**, so email is included), enter the **create-date = today** filter, and execute.
+3. **Read the SAP status bar** — the SQVI query shows a "No values were found" (no-records) message when nothing matches. This is the **empty-day check**: if no records, set the empty flag and skip straight to Phase 5's "nothing to process" email (no export, no mapping).
 4. If records exist, **export the result grid to a file** (System → List → Export → Spreadsheet) to the configured export path; confirm the export file was produced.
 
 Wrapped in retry logic — on SAP failure (won't open / login fail / navigation error), retry up to the configured count, then raise to the outer Catch (→ error email; Finally still cleans up).
@@ -37,14 +37,14 @@ Close SAP, the browser, and Excel cleanly — **on every exit path** (normal com
 ### Exception Handling (outer Try-Catch-Finally, cross-cutting)
 - **SAP failure (Phase 2):** retry per config; on final failure the exception propagates to the **Catch** → log Error + send **error email**. **Finally** then runs Phase 6 cleanup.
 - **Other technical failures (any phase):** propagate to the **Catch** → log Error + send **error email**; **Finally** runs cleanup.
-- **Empty result (Phase 2):** not an error — detected via SE16N's "no values found" message; routes to Phase 5's "nothing to process" email, then **Finally** cleanup. No export/mapping/upload.
+- **Empty result (Phase 2):** not an error — detected via the SQVI query's "no values found" message; routes to Phase 5's "nothing to process" email, then **Finally** cleanup. No export/mapping/upload.
 - **Errors Found / timeout (Phase 4):** not a bot failure — captured and reported in the **summary email**; a human investigates in SBN.
 
 ## Phase Flow
 
 ```mermaid
 graph TD
-    A[Phase 1: Initialize & Read Config] --> B[Phase 2: Extract Vendors from SAP<br/>login, open SE16N, execute]
+    A[Phase 1: Initialize & Read Config] --> B[Phase 2: Extract Vendors from SAP<br/>login, run SQVI query, execute]
     B --> Bok{SAP step OK?}
     Bok -->|No, after retries| CATCH[Catch: log + Send Error Email]
     Bok -->|Yes| Rec{Records found?<br/>SAP status message}
@@ -66,9 +66,9 @@ graph TD
 
 ## Design Notes / Decisions
 - **Cleanup is its own phase (Phase 6) in a Finally block**, not folded into Phase 5 — it must run on *every* exit (normal, empty-day, and fatal-error), and only a Finally guarantees that. (Resolves the earlier open question about splitting cleanup out.)
-- **Empty-day check sits in Phase 2** — SE16N shows a "no values were found" status message right after execute, so the bot detects an empty result at the SAP step and skips export/mapping/upload, routing to Phase 5's "nothing to process" email. Cleanup still runs via Finally.
+- **Empty-day check sits in Phase 2** — the SQVI query shows a "no values were found" status message right after execute, so the bot detects an empty result at the SAP step and skips export/mapping/upload, routing to Phase 5's "nothing to process" email. Cleanup still runs via Finally.
 - **The dated upload name is generated once (Phase 3)** and reused for both the CSV filename and the SBN upload Name, so they can't diverge at minute granularity.
-- **SAP login is the explicit first action of Phase 2**, since the SAP UI automation needs an established, logged-in SAP session before it can navigate SE16N.
+- **SAP login is the explicit first action of Phase 2**, since the SAP UI automation needs an established, logged-in SAP session before it can navigate SQVI.
 - **Errors Found is not a bot failure** — the bot uploads and reports; a human investigates flagged rows in SBN.
 - **Status polling has a timeout** (~1–2 min) since it normally resolves in seconds; on timeout the bot reports "still queued" rather than hanging.
 
@@ -76,4 +76,5 @@ graph TD
 1. Scheduled run time.
 2. Credential storage / login method for SAP and SBN.
 3. Exact SBN CSV header names/order (from user's template).
-4. Exact LFA1 source column names for the six mapped fields.
+4. Exact SQVI query output column names for the six mapped fields.
+5. SQVI query built and accessible to the bot's SAP user.
