@@ -11,11 +11,12 @@
 - UiPath hard constraints apply: linear nested Sequences only, Dictionary for structured data, no Invoke Workflow (all in Main.xaml), Config.xlsx at startup, Verb+Object naming, Windows project.
 
 ## Current phase
-**Phase 2: High-Level Design — in progress (PDD confirmed).**
+**Phase 2: High-Level Design — written to `high-level-design.md`, awaiting user confirmation.**
+Five sequential phases + cross-cutting exception handling. Flow diagram also in `phase-flow.mmd`.
 
 ## Phase status
 - [x] Phase 1 — Discovery (PDD confirmed by user)
-- [~] Phase 2 — High-Level Design
+- [~] Phase 2 — High-Level Design (drafted; awaiting user "yes")
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design
 - [ ] Phase 5 — Full Design Review & sign-off
