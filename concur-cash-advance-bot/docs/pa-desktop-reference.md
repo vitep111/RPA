@@ -1,6 +1,16 @@
-# Power Automate Desktop — Syntax & Behavior Reference
+# Power Automate Desktop — Syntax & Behavior Reference (SUPERSEDED)
 
-**Purpose:** The source of truth for how PA Desktop actually parses fields and behaves. Every step in `detailed-design.md` must conform to this. The `rpa-design-reviewer` agent checks the design against this file. Grows whenever a new discrepancy is found and verified in PA Desktop.
+> # ⛔ SUPERSEDED — NOT THE RULEBOOK
+>
+> **This project was rebuilt on UiPath. The active rulebook is [`uipath-reference.md`](uipath-reference.md).**
+>
+> This file is retained only as the **historical PA Desktop-era record** — the live-verified findings below were real and were expensive to learn, so they are kept rather than deleted. But **nothing in this file governs the current design**, and the `rpa-design-reviewer` agent must check against `uipath-reference.md` instead.
+>
+> **Do not carry the Lessons Learned forward.** L1 (`If` multi-condition vs. Boolean precompute) and L2 (`Set variable` can never be blank — use `N/A`) are **PA Desktop parser quirks with no UiPath equivalent**. UiPath's `Assign` has neither restriction, and `If` takes an ordinary VB.NET boolean expression with `AndAlso`/`OrElse`. Applying these rules to the UiPath design would be a defect, not a safeguard.
+>
+> Likewise void: rule 9.1's flow-scoped `Go to`/`Label` behavior, which the old one-Main-flow architecture decision rested on. UiPath has no `Go to` — see `uipath-reference.md` → R9 for the replacement mechanism.
+
+**Purpose (historical):** This *was* the source of truth for how PA Desktop parses fields and behaves, back when the bot targeted PA Desktop. Every step in the then-current `detailed-design.md` had to conform to it, and the `rpa-design-reviewer` agent used to check the design against this file. **Neither is true any more** — see the banner above; the active rulebook is `uipath-reference.md`. This file no longer grows.
 
 > **Status of each rule:** ✅ = verified in PA Desktop by the user · ⚠️ = believed correct but **not yet verified** (treat with caution).
 
@@ -86,6 +96,8 @@
 
 ## Lessons Learned (PA-specific traps found during design)
 
+> ⛔ **VOID — PA Desktop only.** These are parser quirks of PA Desktop with **no UiPath equivalent**, and the project is now on UiPath. UiPath's `Assign` has neither restriction, and `If` takes an ordinary VB.NET boolean expression. **Applying L1 or L2 to the UiPath design would be a defect, not a safeguard.** See the banner at the top of this file; the active rulebook is `uipath-reference.md`.
+
 These are places where the design's first draft got PA Desktop's actual behavior wrong. Recorded so the same trap isn't reintroduced, and so the `rpa-design-reviewer` agent explicitly checks for each.
 
 | # | Lesson | Where it bit us | Correction | Rule |
@@ -93,7 +105,7 @@ These are places where the design's first draft got PA Desktop's actual behavior
 | L1 | **Two wrong turns, corrected in sequence:** (1) first assumed PA Desktop's `If` only takes one condition, so multi-condition OR checks (config-empty, bad-headers) were written wrong from the start; (2) "fixed" that by precomputing the OR into a Boolean via `Set variable` (`%A = "" OR B = ""%` → flag, then `If %Flag% Equal to %True%`) — **this also failed live**, because `Set variable` errors on a comparison against an empty-string literal ("value cannot be empty"). **Verified correct behavior:** `If`'s own condition list natively supports multiple `is empty`/other conditions combined with `OR` (or `AND`) in one action — no flag, no precompute, just add conditions directly in the `If` action. | detailed-design.md Step 1.10b (config-empty check, OR of 5) and Step 3.10 (bad-headers check, OR of 2) — both went through both wrong turns before landing on the verified form. | Use `If`'s built-in multi-condition OR list directly: `%A% is empty OR %B% is empty OR ...`, one `If`, one Then-body. | 4.4 ✅, 1.7 ✅ |
 | L2 | **`Set variable` cannot be left blank — at all, not just as an expression.** The design's original "Set Log Fields" pattern used `LogUserID = (empty)` / `LogRequestID = (empty)` on every run-level log row (Fatal aborts, "No items", "Run Summary") to signal "no specific user/request for this row." Live testing showed `Set variable` throws "parameter value can't be empty" the moment the Value field is left with nothing in it — there is no way to assign a true empty string this way. | Every "Set Log Fields - ..." action across Phase 1 and Phase 3 (config invalid, credential fail, browser fail, grid load failed, export failed, export unreadable, bad headers, no pending items) — 8 call sites total. | Set an explicit literal placeholder instead of leaving the field blank. This design uses the literal `N/A` for `LogUserID`/`LogRequestID` on run-level rows. | 1.8 ✅ |
 
-**Reviewer rule:** flag any `Set variable` (or table cell describing one) whose Value is written as "(empty)", "(blank)", or similarly implies no characters at all — L2 means that never builds. It must be an explicit literal (this project's convention: `N/A`) or a real variable reference. Also flag any `Set variable` that precomputes a Boolean from a comparison against `""`/empty (L1/rule 1.7 — confirmed broken), or manually splits an OR-of-conditions into stacked single-condition `If`s when the built-in multi-condition `If` would do it directly (L1/rule 4.4). The correct defaults now are: **one `If`, multiple OR'd conditions, added directly** — and **never a truly blank `Set variable` value.**
+**Reviewer rule (⛔ VOID — PA Desktop only; do NOT enforce against the UiPath design):** flag any `Set variable` (or table cell describing one) whose Value is written as "(empty)", "(blank)", or similarly implies no characters at all — L2 means that never builds. It must be an explicit literal (this project's convention: `N/A`) or a real variable reference. Also flag any `Set variable` that precomputes a Boolean from a comparison against `""`/empty (L1/rule 1.7 — confirmed broken), or manually splits an OR-of-conditions into stacked single-condition `If`s when the built-in multi-condition `If` would do it directly (L1/rule 4.4). The correct defaults now are: **one `If`, multiple OR'd conditions, added directly** — and **never a truly blank `Set variable` value.**
 
 > Still-open, same family — not yet hit, but worth checking as later phases are designed:
 > - **AND-combined conditions** in one `If` — same multi-condition list mechanism as OR should apply (per 4.4), but not separately confirmed live; verify if a design needs it.

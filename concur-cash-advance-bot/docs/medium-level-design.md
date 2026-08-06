@@ -1,7 +1,15 @@
-# Medium-Level Design — Concur Cash Advance Auto-Submit Bot
+# Medium-Level Design — Concur Cash Advance Auto-Submit Bot (SUPERSEDED — AWAITING REBUILD)
 
-**Status:** Phase 3 — in progress. Confirming one phase at a time.
-**Platform:** Power Automate Desktop (primary), UiPath (fallback).
+> # ⛔ DO NOT BUILD FROM THIS FILE
+>
+> Everything below is the **Power Automate Desktop** design with the **admin-grid-export** report source. **Both are gone.** The project was rebuilt on **UiPath**, and the report now arrives as an **emailed attachment** read from a dedicated Outlook folder.
+>
+> It is stale on two axes at once and is being **replaced phase by phase, not patched**. Specifically wrong throughout: PA Desktop syntax and actions; the whole Phase 3 grid-navigation/export/download design; `ExportFilePath` / `ExportFolderPath` (no producer); browser launch in Phase 1; and the **phase numbering — Login and Get Pending Report have swapped** (Login is now Phase 3, Get Pending Report is Phase 2).
+>
+> **Current authority:** `PDD.md` and `high-level-design.md` for the spec, `uipath-reference.md` for the platform rules, `PROGRESS.md` for where the rebuild stands.
+
+**Status:** superseded — rebuild not yet started.
+**Platform (historical):** Power Automate Desktop.
 
 ---
 

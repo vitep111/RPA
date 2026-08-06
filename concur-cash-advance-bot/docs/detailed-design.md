@@ -1,7 +1,19 @@
-# Detailed Design — Concur Cash Advance Auto-Submit Bot
+# Detailed Design — Concur Cash Advance Auto-Submit Bot (SUPERSEDED — AWAITING REBUILD)
 
-**Status:** Phase 4 — in progress. Confirming one phase at a time.
-**Platform:** Power Automate Desktop (primary), UiPath (fallback).
+> # ⛔ DO NOT BUILD FROM THIS FILE
+>
+> Everything below is the **Power Automate Desktop** design with the **admin-grid-export** report source. **Both are gone.** The project was rebuilt on **UiPath**, and the report now arrives as an **emailed attachment** read from a dedicated Outlook folder.
+>
+> **The two recorded PASS reviews in this file are void.** They reviewed PA Desktop actions against the PA Desktop rulebook; the old Phase 3/6 designed the grid export that no longer exists at all.
+>
+> Specifically wrong throughout: the PA Desktop Syntax Conventions preamble (`%Var%`, unquoted literals, `%3%`, parameterless subflows); the Flow & Subflow Structure section, which rests on PA's flow-scoped `Go to`/`Label` — **UiPath has no `Go to`**, and the early exit is now a `runShouldContinue` guard flag (`uipath-reference.md` R9); the `WriteLogRow` global-caller subflow pattern; `ExportFilePath` / `ExportFolderPath`; browser launch in Phase 1; and the **phase numbering — Login and Get Pending Report have swapped** (Login is now Phase 3, Get Pending Report is Phase 2).
+>
+> Also note: the remark that a UiPath port "would likely split each phase into its own workflow with proper in/out arguments" **violates the governing skill's hard constraint** of a single `Main.xaml` with no `Invoke Workflow File` (`uipath-reference.md` R2). Do not carry it forward.
+>
+> **Current authority:** `PDD.md` and `high-level-design.md` for the spec, `uipath-reference.md` for the platform rules, `PROGRESS.md` for where the rebuild stands.
+
+**Status:** superseded — rebuild not yet started.
+**Platform (historical):** Power Automate Desktop.
 
 ---
 
