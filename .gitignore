@@ -43,6 +43,12 @@ Thumbs.db
 # The canonical tracked copy lives in .claude/skills/. Don't commit the generated one.
 .agents/
 
+# Live vendor data dropped for design reference (SBN template, SAP SQVI export).
+# Real vendor names, tax IDs, and emails must never reach GitHub — only the
+# folder's README is tracked.
+vendor-sbn-upload-bot/reference-files/*
+!vendor-sbn-upload-bot/reference-files/README.md
+
 # Logs
 *.log
 logs/

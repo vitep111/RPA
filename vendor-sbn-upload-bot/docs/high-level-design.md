@@ -1,6 +1,6 @@
 # High-Level Design — Daily Vendor SBN Upload Bot
 
-**Status:** Awaiting user confirmation (Phase 2).
+**Status:** Confirmed by user (Phase 2 of the design process); reviewer PASS.
 **Platform:** UiPath (linear nested Sequences, Config.xlsx, Dictionary data, all in Main.xaml).
 
 The process decomposes into **six phases** wrapped in a single outer **Try-Catch-Finally**. Phases 1–5 run inside the Try; the Catch sends an error email on any unhandled failure; the **Finally always runs Phase 6 (Cleanup)** so no application is ever left open, regardless of which path the run exits on. Each phase is a named `Sequence` container inside `Main.xaml`.
@@ -73,8 +73,11 @@ graph TD
 - **Status polling has a timeout** (~1–2 min) since it normally resolves in seconds; on timeout the bot reports "still queued" rather than hanging.
 
 ## Open Items (carried forward)
-1. Scheduled run time.
-2. Credential storage / login method for SAP and SBN.
-3. Exact SBN CSV header names/order (from user's template).
-4. Exact SQVI query output column names for the six mapped fields.
-5. SQVI query built and accessible to the bot's SAP user.
+
+**`PDD.md` → "Open Items (TBC)" is the single home for this list** — statuses change as items resolve, and three copies drifting apart is how a resolved item gets re-litigated. Titles below are for orientation only; go to the PDD for current status.
+
+1. Scheduled run time *(deferred)*
+2. Credential storage / login method for SAP and SBN *(deferred)*
+3. Exact SBN CSV header names/order (from user's template)
+4. Exact SQVI query output column names for the six mapped fields
+5. SQVI query built and accessible to the bot's SAP user *(resolved 2026-08-14)*

@@ -103,7 +103,7 @@ Distinguishing "empty day" from "SAP failure" is the crux of this phase, and nat
         - else (**result grid shown**):
           a. **Clear stale export** — delete any previous-run `ExportPath` so a leftover file can't be mistaken for this run's output.
           b. **Export the grid** to `ExportPath` via System → List → Export → Spreadsheet, driven by UI activities (⚠️ U7).
-          c. **Validate `ExportPath`:** file **missing** → **Throw** `"SAP export file not produced"` → retry; file with **≥1 data row** → proceed (records found); file with **0 rows** (contradicts a non-empty grid) → fall back to the empty path (`Assign EmptyResultFlag = True`) + log a Warning (U2).
+          c. **Validate `ExportPath`:** file **missing** → **Throw** `"SAP export file not produced"` → retry; file with **≥1 data row** → proceed (records found); file with **0 rows** (contradicts a non-empty grid) → fall back to the empty path (`Assign EmptyResultFlag = True`) + log a Warning (U2, ⚠️ **U10** — the row count depends on the export's actual shape, and it can be wrong in both directions: an export with **no header row** has its only data row consumed as the header, so a 1-vendor day counts zero and routes to the "nothing to process" email without failing the run (only a Warning is logged); **preamble rows** miscount the other way, passing a garbage row through to Phase 3).
      7. **Exit the loop on success** — `Assign retryCount = CInt(configDict("MaxRetry"))` (both empty and records are success).
    - **Catch ex:**
      1. `Assign retryCount = retryCount + 1`.
@@ -191,7 +191,7 @@ Some vendors have **multiple emails** in ADR6, but SBN's file has a single email
 
 ### Key logical steps
 1. **Log "Phase 3 started"** (Info).
-2. **Read the SAP export** — `Read Range` inside a `Use Excel File` scope on `ExportPath` (an `.xlsx` Spreadsheet export) → `sapData` (DataTable). (Already validated non-empty in Phase 2.) The scope self-closes on exit (⚠️ U4; stray-Excel fallback in Phase 6).
+2. **Read the SAP export** — `Read Range` inside a `Use Excel File` scope on `ExportPath` → `sapData` (DataTable). (Already validated non-empty in Phase 2.) The scope self-closes on exit (⚠️ U4; stray-Excel fallback in Phase 6). ⚠️ **U10** — this step assumes the export is an `.xlsx` with a clean header row in row 1; the format SAP actually produces, the header position, and any preamble rows are unconfirmed until a sample export is in hand. Fallback: `Read Range` with an explicit range/offset, or read the ALV grid directly (see U7 — that choice also displaces Phase 2's export-file validation).
 3. **De-duplicate to one row per vendor (safety net)** — if any Vendor ID appears more than once in `sapData`, collapse to a single row per Vendor ID (prefer a **non-blank email**, else the first row — the export carries only the six fields, so `FLGDEFAULT` isn't available as a tie-break here; the default-email selection happens query-side) → `vendorData`. Log a Warning with the collapsed count if any duplicates were found. (The query's default-email filter should already yield one row per vendor; this guards against a stray duplicate.)
 4. **Read the SBN template headers** — read `TemplatePath`'s header row → build `sbnData` (DataTable) with those columns, in template order.
 5. **Map rows** — `For Each Row` in `vendorData`: create an `sbnData` row, assign each SBN column from its mapped source column (straight copy per the mapping table). Add to `sbnData`.
