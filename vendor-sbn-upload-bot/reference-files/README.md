@@ -14,7 +14,7 @@ The template from the SBN **Upload Vendors** page ("Download latest template ver
 
 Closes / narrows:
 - **Open Item #3** — exact column headers and their order. Phase 3 builds its output table from this header row at runtime.
-- **⚠️ U8** (CSV format: delimiter, encoding, quoting, line endings) — **only if the template is a CSV.**
+- **⚠️ U8** — the template settles its **own** format either way (which read activity Phase 3 uses to pull the headers, and whether headers come back as headers rather than `Column1..N`). The **output**-side questions it answers — delimiter, encoding, quoting, line endings — apply **only if the template is a CSV**; if it's `.xlsx`, those stay open until a known-good accepted file turns up.
 
 Also needed alongside it:
 - **Which columns SBN marks as mandatory.** Phase 3 maps six fields and leaves any other template column blank. A seventh *required* column would not fail the bot — it would surface as "Errors Found" in Phase 4, after the upload.
@@ -29,7 +29,9 @@ Closes / narrows:
 - **Tax ID** — whether the query returns `STCD1` or `STCEG`/VAT.
 - **Country** — code or name.
 - **⚠️ U10** — the shape of the export file: the format SAP actually writes, which row the headers land on, and whether there are preamble rows. Phase 3's `Read Range` currently assumes a clean sheet with headers in row 1.
-- **The query's join behavior** (PDD Prerequisites) — confirm **one row per vendor**, and that a vendor with **no default email appears with a blank** rather than dropping out of the file. If such vendors are missing, `FLGDEFAULT = 'X'` is sitting in a WHERE clause instead of the JOIN ON, which collapses the outer join and silently loses those vendors.
+- **The duplicate-row problem** — as of 2026-08-14 the query returns **2 rows per vendor** (`uipath-reference.md` Lesson L1). Send the export *as-is*, duplicates included: seeing which columns the paired rows share and which differ is what identifies the table causing the fan-out. Don't clean it up first.
+- **The query's join behavior** (PDD Prerequisites) — once the duplication is fixed, confirm a vendor with **no default email appears with a blank** rather than dropping out of the file. If such vendors are missing, `FLGDEFAULT = 'X'` is sitting in a WHERE clause instead of the JOIN ON, which collapses the outer join and silently loses those vendors.
+- **Whether City/Country come from LFA1 or ADRC** — this decides whether ADRC can be dropped from the query to kill the fan-out at source, or whether it's feeding two mapped columns and has to stay.
 
 > This file does **not** answer ⚠️ U7 (driving the export via the SAP menu — menu path, file-format dialog, overwrite handling). That needs a live run during build.
 
