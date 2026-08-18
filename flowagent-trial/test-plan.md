@@ -546,3 +546,33 @@ Limits, also verified:
 Process lesson, learned the hard way: in a shared environment, **verify state immediately before
 a write, not only after** — one skipped check produced a confident, wrong defect report that took
 four controlled experiments to retract.
+
+## Cleanup — complete
+
+Both trial flows deleted: `ZZ-FLOWAGENT-TRIAL-01-Hello` (`99a261e0…`) and
+`ZZ-FLOWAGENT-TRIAL-02-StateProbe` (`cd3bf9a6…`).
+
+Post-cleanup listing confirms **all 10 baseline flow IDs still present**, none deleted, none
+renamed. Every write made during the trial went to a `ZZ-FLOWAGENT-TRIAL-` flow. The guardrails
+held.
+
+`delete_flow` also auto-captures a backup before deleting, restorable via `restore_backup` for
+~10 retentions — so the deletion is recoverable from this machine's `.flowagent/` directory.
+
+Two changes in the environment are **not** ours, consistent with the concurrent-edit pattern
+seen all session:
+
+- `2026-08-18 Expense noti` is now `Stopped` (was `Started`), modified 08:08
+- A new flow `20260818 3rd Flow Reminder` (`883abfb5…`) appeared, created 08:53
+
+Left in place, harmless, deletable by hand: files in OneDrive `/FlowAgentTrial/` from the two
+successful runs, plus the `2026/08/17/Round_2` folder tree that OneDrive auto-created during the
+failed-fault attempt. `.flowagent/` local backups are git-ignored and can be kept or deleted
+freely.
+
+## Follow-up not taken
+
+The `Daily FX Rate Check` path-drift risk (see the OneDrive silent-folder-creation finding) was
+raised and the user declined a review. Recorded here so it is not lost: that flow builds its
+Excel path from `formatDateTime(addDays(utcNow(),-1),'yyyy/MM/dd')`, and on the write side a
+drifted path would not raise an error.
