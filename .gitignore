@@ -63,3 +63,6 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# FlowAgent MCP local working state (backups, session env) - regenerable, machine-local
+.flowagent/
