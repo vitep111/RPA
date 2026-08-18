@@ -49,6 +49,12 @@ Thumbs.db
 vendor-sbn-upload-bot/reference-files/*
 !vendor-sbn-upload-bot/reference-files/README.md
 
+# Sample invoice PDFs and validation-site screenshots dropped for design reference.
+# Real invoices carry supplier names, bank details, and amounts — only the folder's
+# README is tracked.
+invoice-signature-verification-bot/reference-files/*
+!invoice-signature-verification-bot/reference-files/README.md
+
 # Logs
 *.log
 logs/
