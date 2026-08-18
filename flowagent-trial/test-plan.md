@@ -452,3 +452,97 @@ so the backup log can't distinguish a surgical edit from a full replace.
 
 `.flowagent/` is git-ignored here: regenerable local working state, and it would churn on every
 write.
+
+## First fault attempt failed — and found a real silent-failure mode
+
+The initial fault set `folderPath` to a non-existent dated path
+(`/FlowAgentTrial/2026/08/17/Round_2`), on the assumption it would 404 at runtime. **The run
+succeeded.** OneDrive's `CreateFile` silently creates missing folders in the path.
+
+The test-design mistake is mine, but the underlying behaviour matters beyond this trial: a
+production flow writing to a mistyped, drifted, or stale folder path **will not fail**. It
+creates the wrong folder, writes the file there, and reports a green run.
+
+This applies directly to the existing `Daily FX Rate Check`, which builds its path from
+`formatDateTime(addDays(utcNow(),-1),'yyyy/MM/dd')`. If that expression ever drifts, output
+lands in a new wrong folder with a clean run history and no alert. Worth a look independently
+of this trial. (Its Excel `GetItem` step would likely fail on the missing file — but only
+because it *reads*; the write side gives no such protection.)
+
+Second fault, which did work — property selection on a scalar, a classic runtime-only error:
+`body: "@{outputs('Compose_Trial_Marker')['status']}"`
+
+## T5 result — PASS (with an important boundary)
+
+Run `08584145641917497489914079456CU30`, status `Failed`.
+
+`diagnose_run` returned:
+
+```json
+{
+  "name": "Create_Trial_File",
+  "code": "InvalidTemplate",
+  "message": "... 'The template language expression
+     'outputs('Compose_Trial_Marker')['status']' cannot be evaluated because
+     property 'status' cannot be selected. Property selection is not supported
+     on values of type 'String'. ...'",
+  "remediation": "Expression or template error. Check the expression syntax in this action's inputs."
+}
+```
+
+It named the failing action, the error class, **quoted the offending expression verbatim**, gave
+the reason, and offered a remediation.
+
+**Was this a fair pass despite the same-session setup?** Yes. The prior knowledge added nothing
+— the error message is self-contained and identifies the fault without inference. Any agent
+reading that output cold would locate it immediately.
+
+`get_run_actions` is also materially richer on failure than on success: it carries `errorCode`
+and `errorMessage` per action, and explains downstream skips precisely —
+`"the 'runAfter' condition for action 'Create_Trial_File' is not satisfied. Expected status
+values 'Succeeded' and actual value 'Failed'"`. The full causal chain is legible.
+
+### The boundary — what this does not prove
+
+This was the **easy class** of failure: the platform itself emitted a precise, self-describing
+error. The tooling relayed it faithfully, which is genuinely valuable, but relaying a good error
+message is a lower bar than diagnosis.
+
+The blog's headline case — spotting that negative credit lines were causing connector rejections
+— required correlating **actual output values** across actions. That is still unverified, and
+T4 established that succeeded actions expose no inputs or outputs at all. So:
+
+| Failure class | Verdict |
+|---|---|
+| Action throws a descriptive platform error | **Verified** — relayed in full, expression quoted, remediation offered |
+| Action fails with an opaque connector error | Untested |
+| Flow succeeds but produces *wrong data* | **Cannot be diagnosed with these tools** — no output values on succeeded runs |
+
+The third row is the one that matters most for the kind of work in this repo. A bot that reports
+success while doing the wrong thing is the failure mode this repo has already been bitten by
+twice (see the uninitialized-variable lessons in `concur-cash-advance-bot`). These tools would
+not have caught those.
+
+## Overall verdict
+
+**Adopt for authoring and for triaging failed runs. Do not rely on it to verify correctness.**
+
+Strengths, all verified rather than assumed:
+- `preflight_flow` catches real errors before they reach the tenant, including the
+  read-returns-what-write-rejects `authentication` trap
+- `edit_flow` surgical edits preserve untouched structure exactly, with a positive
+  `unchanged: N` assertion and preview-token optimistic concurrency
+- Automatic local backups before every write
+- Failed-run diagnosis relays the full platform error including the offending expression
+- It declines to guess: `source: "none"` rather than defaulting; `warning` rather than a
+  fabricated `inSolution: false`
+
+Limits, also verified:
+- No action inputs/outputs on succeeded runs — the "wrong data, green run" case is invisible
+- `list_flows` schema claims `top: 500`; the API caps at 50
+- Backups are local and machine-bound, not tenant-side
+- Round-tripping a read definition into a write fails without preflight
+
+Process lesson, learned the hard way: in a shared environment, **verify state immediately before
+a write, not only after** — one skipped check produced a confident, wrong defect report that took
+four controlled experiments to retract.
