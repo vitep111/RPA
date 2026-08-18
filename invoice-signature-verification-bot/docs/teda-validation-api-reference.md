@@ -5,17 +5,19 @@ platform-independent document: it describes ETDA's service, not our bot. It stay
 whether the bot is eventually built in UiPath or anything else, and it is the document the external
 developer integrates against.
 
-> This is **not** the project rulebook. The platform rulebook (`uipath-reference.md` or equivalent)
-> gets written once the platform is decided — see `PROGRESS.md`.
+> This is **not** the project rulebook. That is **`uipath-reference.md`**, seeded 2026-08-18 once
+> decision D2 settled the platform — it governs how *our bot* is built, while this file stays
+> authoritative on what *ETDA* does.
 
 ## Confidence legend
 
-Nothing here has been live-tested by us. Three states:
+Nothing here has been live-tested by us. Four states:
 
 | Mark | Meaning |
 |---|---|
 | 📄 | **Documented** in an official ETDA document — the API spec, the portal FAQ, or the terms of service. Quoted or translated, not inferred — but not yet proven against the live service. |
 | ⚠️ | **Inferred** by us from the documents. Plausible, unconfirmed, needs a live test. Each carries a fallback. |
+| ✅ | **Confirmed by the user** — a settled decision, carrying a D-number in `PROGRESS.md`. Binds later phases; a phase contradicting one is a defect, not a revision. |
 | ❓ | **Unknown** — the documents don't say. Must be asked or tested. |
 
 A 📄 item is still capable of being wrong: the spec is **version 2.2, dated 9 May 2022**, and the
@@ -116,7 +118,7 @@ the placeholder means something else.
 
 | Field | Type | Notes |
 |---|---|---|
-| `file` | File | the PDF |
+| `file` | File | the invoice file — **PDF or XML** (D3) |
 | `digest` | Text | **SHA-256 of the file, lowercase hexadecimal** |
 
 The `digest` is mandatory and checked: a mismatch is rejected with `P1002`. So the bot must hash the
@@ -140,7 +142,7 @@ only the action changes.
 | Code | Meaning | Bot action |
 |---|---|---|
 | `P1000` | Success | proceed to poll the Result API |
-| `P1001` | Invalid File Type | **business exception** — not a PDF the service accepts. Report, don't retry |
+| `P1001` | Invalid File Type | **business exception** — not a file type the service accepts (D3: PDF and XML are). Report, don't retry |
 | `P1002` | Invalid Digest Value | **defect in our bot**, not a property of the invoice. Log loudly, fail the item, don't retry — a retry reproduces it |
 | `P1003` | File Size Limit Exceeded | **business exception** — route to manual handling. Don't retry |
 | `P1004` | No Input File | **defect in our bot** — request built wrongly. Don't retry |
@@ -215,16 +217,24 @@ contract itself has changed. Fallback: if `400`s cluster across many invoices ra
 singly, treat that as the contract having changed and abort, per the Q8 threshold.
 
 ❓ **Nothing is documented about throttling responses (e.g. `429`), connection timeouts, or TLS
-requirements.** Fallback: treat any undocumented 4xx as fatal-to-run (it will not fix itself), any
+requirements.** ⚠️ Carve-out: a **`429`** (or any explicit throttle response) is transient by definition
+and must be a **bounded retry with backoff**, not fatal-to-run — it is the one undocumented 4xx that
+*does* fix itself. Unlikely at ~10 invoices/week (Q6), but cheap to get right. Fallback: treat any
+*other* undocumented 4xx as fatal-to-run (it will not fix itself), any
 undocumented 5xx or network timeout as a bounded retry with backoff, and surface both distinctly from
 business outcomes so an infrastructure problem is never reported as an invoice verdict.
 
-### 3. Export Excel API — not useful here
+### 3. Export Excel API — relevance depends on Q16
 
-📄 `POST /WVP/v2/verification/export-xls` returns **XML schema/schematron** structure errors.
+📄 `POST /WVP/v2/verification/export-xls` (`apikey`, JSON body `{"transid": "..."}`) returns the
+**XML schema/schematron** structure-check result. 📄 Response fields: `transid`, `result`
+(`"success"`/`"error"`), `desc`, `schema_message`, `Schematron_message` — each message being
+`"Validate Successfully"`, `"N/A"`, or an error listing.
 
-**Irrelevant to this project.** It reports on XML structure validation; our inputs are PDFs and our
-question is about signatures. Recorded only so nobody spends time on it.
+⚠️ **Was recorded as irrelevant while the scope was PDF-only. XML is now in scope (D3), so this becomes
+relevant if — and only if — structure validation is in scope (Q16).** If the business wants only the
+signature verdict, this endpoint stays unused. Fallback: leave it out of the first build; it needs no
+new plumbing to add later, since it takes the same `transid` the bot already holds.
 
 ### Endpoints that are NOT for us
 
@@ -242,6 +252,37 @@ this explicitly in the developer brief: `verify-extract` in particular looks lik
 to `verify` and is not one.
 
 ---
+
+## The result body — XML as well as PDF (D3)
+
+⚠️ **Scope changed 2026-08-18: XML is in scope alongside PDF (decision D3).** The PDF path below is
+documented in full and unaffected. The XML path is documented at the same level of detail only once
+**Q16** (is *structure* validation in scope, or only signatures?) is answered — that answer decides
+whether XML brings one extra result block or three. Fallback until then: treat the PDF path as complete
+and the XML path as sketched, and do not let a design phase consume the XML sections as if they were
+finished.
+
+📄 What the spec gives for XML, in outline:
+
+| Field | Cardinality | What it holds |
+|---|---|---|
+| `XmlSignatureResult` | 0–2 | XML signature — `signingTime`, `signatureCode`, cert fields, nested `embedTimestampResult`, `fileName` |
+| `XmlStructureResult` | 0–2 | **structure** check — `schemaCode`, `schemaMessage`, `schematronCode`, `SchematronMessage`, `structureActiveStatus` (`"Active"`/`"Obsolete"`), `fileName` |
+| `XMLfhirResult` | 0–2 | FHIR profile check — `fhirCode`, `fhirMessage`, `fileName`. Not relevant to invoices |
+
+Three consequences that already matter:
+
+- 📄 **`N0001` is the XML "no signature / unsupported format" code**, the exact counterpart of `N0002` on
+  the PDF side. Everywhere this document previously treated `N0001` on a *PDF* result as anomalous, that
+  still holds — but `N0001` on an *XML* result is now an ordinary business outcome, not an error.
+- 📄 **The XML size limit is 3,072 KB**, not the PDF's 20,480 KB. The pre-flight size check is therefore
+  **per file type**, not one number.
+- ⚠️ **`XmlStructureResult` answers a different question from every other block in this document.**
+  Signature validation asks *who signed this and can it be trusted*; structure validation asks *is this
+  a well-formed e-Tax document under a schema ETDA recognises*. A file can pass either and fail the
+  other. Whether the bot reports it at all is **Q16**. Fallback: capture the codes from the start even
+  if they are not acted on — they cost nothing to carry and re-running every invoice later to obtain
+  them would be expensive.
 
 ## The result body, for a PDF
 
@@ -279,21 +320,21 @@ For PDFs, the parts that matter:
 ### Which structures decide the verdict
 
 Three separate structures each carry a `signatureCode`, and the spec does not say how to combine them.
-Our position, to be confirmed with the user (`PROGRESS.md` Q3(c)):
+✅ **Settled by the user 2026-08-18 — decision D4** (`PROGRESS.md`):
 
 | Structure | Role |
 |---|---|
-| `pdfDigitalSignatureResult[]` | **decides the verdict.** This is "does the invoice have a valid digital signature" |
-| `pdfTimeStampingResult[]` | ⚠️ **reporting only by default.** A document-level timestamp proves *when* it existed, not *who* signed it. A PDF with a timestamp but no digital signature is **not** a signed invoice |
-| `embedTimestampResult` (nested) | ⚠️ **reporting only.** It qualifies its parent signature's time, and its status is already reflected in whether the parent is Trusted |
+| `pdfDigitalSignatureResult[]` | **decides the verdict** for a PDF. This is "does the invoice have a valid digital signature" |
+| `XmlSignatureResult[]` | **decides the verdict for an XML file** (D3) — the exact counterpart. ⚠️ Its "no signature / unsupported format" code is **`N0001`**, not `N0002`; both map to the *No supported signature* outcome (D4). Fallback: if both a PDF and an XML signature block are populated for one file — the PDF/A-3-with-embedded-XML case — **the PDF signature governs and the XML finding is reported alongside it**, pending Q17 |
+| `XmlStructureResult[]` | ⚠️ **captured, not acted on**, pending Q16. A different question entirely: schema/schematron conformance, not signing |
+| `pdfTimeStampingResult[]` | ✅ **reporting only — confirmed (D4).** A document-level timestamp proves *when* it existed, not *who* signed it. A PDF with a timestamp but no digital signature is **not** a signed invoice |
+| `embedTimestampResult` (nested) | ✅ **reporting only — confirmed (D4).** It qualifies its parent signature's time, and its status is already reflected in whether the parent is Trusted |
 | `pdfaResult`, `ltvCode`, `ltaCode`, `signatureTypeCode` | reporting only — but `signatureTypeCode` `E0007`/`E0008` are worth surfacing (see below) |
 
 ⚠️ **A PDF can carry up to five signatures with five different verdicts, and only the five most recent
-are reported at all.** The combination rule is a business decision, not something the API answers
-(`PROGRESS.md` Q3(c)).
-
-Fallback until decided — **most-severe-wins**, which yields a single outcome for the invoice rather than
-just a yes/no:
+are reported at all.** The combination rule is a business decision, not something the API answers.
+✅ **Confirmed by the user 2026-08-18 (D4) — most-severe-wins**, which yields a single outcome for the
+invoice rather than just a yes/no:
 
 ```
 Could not check  >  Untrusted  >  Warning  >  No supported signature  >  Trusted
@@ -374,8 +415,11 @@ appears to cover. Fallback: report them alongside the verdict rather than changi
 `N0001` cannot be checked · `N0002` Not Implemented · `N0003` no compliance specified ·
 `N9999` Internal Error.
 
-**Schema / Schematron / FHIR** — 📄 `S0001` Valid · `E0001` Invalid Version · `E0002` Invalid structure ·
-`N0001`/`N0002`/`N9999` as above. XML only; not used on our path.
+**Schema / Schematron** (`schemaCode`, `schematronCode`) — 📄 `S0001` Valid · `E0001` Invalid Version ·
+`E0002` Invalid structure (message lists the failures) · `N0001` not checked / not checkable ·
+`N0002` Not Implemented · `N9999` Internal Error. ⚠️ **In scope pending Q16** now that D3 admits XML:
+capture these codes, do not act on them until Q16 is answered. **FHIR** (`fhirCode`) uses the same code
+set and remains **out of scope** — medical certificates, not invoices.
 
 > ⚠️ **These tables reuse the same code strings with unrelated meanings — see trap 4 below.** Read each
 > code field against its own table, never a shared one.
@@ -423,12 +467,17 @@ The requirement is precisely "does this PDF have a digital signature or not". **
 answer that**, because a genuine signature in an unsupported format returns the same code as no
 signature at all.
 
-The risk is asymmetric and needs a business decision. The **outcome** is fixed either way — *No
-supported signature*. What's open is the **disposition**:
+The risk is asymmetric. The **outcome** is fixed either way — *No supported signature*; the
+**disposition** was the open part, and is now ✅ **confirmed as Manual review (D4)**. The two candidates
+considered:
 
 - **Reject** (i.e. act as though it is simply unsigned) — simple, matches what the portal shows a human
   today, but will occasionally reject a genuinely signed invoice from a supplier using an exotic format.
 - **Manual review** — safer, at the cost of a queue someone has to work.
+
+⚠️ **The same trap applies unchanged to `N0001` on an `XmlSignatureResult`** (D3) — the XML code carries
+the identical "no signature **or** unsupported format" conflation, and D4 gives it the same
+*Manual review* disposition for the same reason.
 
 ⚠️ Our reading is that for e-Tax invoices under the Thai schemes the unsupported-format case is rare,
 since those schemes mandate supported certificate types. Unverified. Fallback: **route `N0002` to manual
@@ -493,11 +542,15 @@ five-outcome model in the implications below.
 📄 From the FAQ (**not** from the API spec — the spec documents `P1003` File Size Limit Exceeded but
 states no number):
 
-| Format | Maximum |
-|---|---|
-| PDF / PDF/A-3 | **20,480 KB** |
-| XML | 3,072 KB |
-| JSON FHIR | 3,072 KB |
+| Format | Maximum | In scope? |
+|---|---|---|
+| PDF / PDF/A-3 | **20,480 KB** (20,971,520 bytes) | ✅ yes |
+| XML | **3,072 KB** (3,145,728 bytes) | ✅ yes, per D3 |
+| JSON FHIR | 3,072 KB | ❌ no — medical certificates, not invoices |
+
+⚠️ **The size check is per file type**, since PDF's ceiling is nearly seven times XML's. A single
+hardcoded 20 MB pre-check would let oversized XML through to a `P1003` round-trip. Fallback: two config
+keys rather than one, and `P1003` remains the authority either way.
 
 ⚠️ We read "KB" here as binary kilobytes, so **20,480 KB = 20,971,520 bytes** (20 MiB), not 20,000,000.
 Getting this wrong in the safe direction costs nothing; getting it wrong the other way silently rejects
@@ -534,8 +587,11 @@ document does not mention. Fallback: the bot must not fail on unexpected extra J
 developer should re-request the current spec version when applying for the API key rather than building
 from this 2022 document alone.
 
-This does not affect our PDF path, which is documented consistently throughout. It does affect how much
-weight a 📄 mark deserves.
+This does not affect our PDF path, which is documented consistently throughout. ⚠️ It bears more heavily
+on the **XML** path now in scope (D3): the FHIR block and `XMLfhirResult` are exactly the areas where the
+2022 spec visibly lags, so XML fields are the ones most exposed to drift. Fallback: this is what
+`uipath-reference.md` U5 exists for — parse defensively, never bind to a fixed type. It also affects how
+much weight a 📄 mark deserves.
 
 ---
 
@@ -555,21 +611,22 @@ Carried into the PDD and the design phases. **Except where marked as a confirmed
      reportable distinctly, per implication 5;
    - the **disposition** (Accept / Reject / Manual review / Retry);
    - a **run-fatality flag** — whether this failure is item-scoped or fatal to the whole run
-     (`401`/`404`/`405`, **any undocumented 4xx**, clustered `400`s, or the Q8 consecutive-failure
-     threshold — see "HTTP and authentication failures"). Without this the caller would have to read
+     (`401`/`404`/`405`, any undocumented 4xx **except `429` / explicit throttle responses**, clustered
+     `400`s, or the Q8 consecutive-failure threshold — see "HTTP and authentication failures"). Without this the caller would have to read
      HTTP codes to know whether to abort, which the boundary forbids. ⚠️ Two of those conditions are
      **cross-invocation** — a single call cannot know it is the hundredth consecutive failure — so
-     **the consecutive-failure counter lives inside the boundary**, owned by the step. Fallback: if the
-     chosen platform makes step-local state awkward, pass the counter in and out as part of the
-     contract; what must not happen is the caller keeping its own tally by inspecting HTTP codes, which
-     reintroduces exactly the coupling the boundary removes;
+     **the consecutive-failure counter is owned by the step**, and no caller may keep its own tally by
+     inspecting HTTP codes. **UiPath realisation (D2): `uipath-reference.md` R11** — a `Main`-scope
+     variable initialised in the R8 prologue and written only by this Sequence, *not* a
+     Sequence-scoped variable, which would reset on every entry and stop the threshold ever firing.
+     R11 also fixes the reset semantics that make it *consecutive* rather than cumulative;
    - the **per-signature entries** — `signatureCode`, `signatureTypeCode` (so `E0007`/`E0008` can be
      surfaced as the code tables require), certificate fields, `signingTime`, and `ltvCode`/`ltaCode`
-     if those are to be reportable at all. ⚠️ Timestamp entries (`pdfTimeStampingResult`) are omitted on
-     two grounds together: Q3(c)'s default keeps them out of the verdict, **and** no reporting
-     requirement for them exists yet (Q5). **A non-default answer to Q3(c)'s *timestamp* question
-     widens this list** — a different aggregation ranking does not. Fallback: carry them from the start
-     if either answer looks likely, since adding a field is cheaper than a second pass over the design;
+     if those are to be reportable at all. ✅ Timestamp entries (`pdfTimeStampingResult`) are omitted
+     because **D4 confirms a timestamp-only document is not "signed"**, so they stay out of the verdict.
+     ⚠️ The only remaining ground for adding them is a **Q5 reporting** requirement. Fallback: carry them
+     from the start if Q5 looks likely to want them, since adding a field is cheaper than a second pass
+     over the design;
    - the **transaction identifiers** `TransactionID` and `TransactionDate` (implication 8). ⚠️ Always
      handed back, but the field is unreliable as a success signal **in both directions**: it may be
      `null` on a failed submission, *and* the spec's examples show it populated on a failure code too
@@ -608,8 +665,7 @@ Carried into the PDD and the design phases. **Except where marked as a confirmed
    an implausible rate on first run, suspect the mail path before suspecting the suppliers.
 
 3. **SHA-256 hashing capability is mandatory**, not optional — the `digest` field is required.
-   ⚠️ If UiPath is chosen (see `PROGRESS.md` Q7), this means the **`UiPath.Cryptography.Activities`**
-   package — an extra dependency to declare. ❓ Confirm it emits **lowercase hex** rather than Base64 or
+   Per D2 this means the **`UiPath.Cryptography.Activities`** package — a confirmed dependency. ❓ Confirm it emits **lowercase hex** rather than Base64 or
    uppercase, since `P1002` is the only feedback on getting it wrong. Fallback: normalise the hash
    string to lowercase hex explicitly rather than trusting the activity's default.
 
@@ -621,8 +677,8 @@ Carried into the PDD and the design phases. **Except where marked as a confirmed
    vocabularies are needed, and conflating them is how contradictions creep in:
 
    - **Outcome** = what the check *established about the invoice*. Determined by ETDA. Not negotiable.
-   - **Disposition** = what the bot *does about it*. A business decision (`PROGRESS.md` Q3), and the
-     only one of the two the user gets to choose.
+   - **Disposition** = what the bot *does about it*. A business decision — the only one of the two the
+     user gets to choose — ✅ settled as **D4** (`PROGRESS.md`).
 
    **Outcomes.** ⚠️ This table applies to `signatureCode` **inside `pdfDigitalSignatureResult` only** —
    it is not a general code map. `S0002` ("timestamp is trustworthy") appears in the Trusted row because
@@ -636,12 +692,12 @@ Carried into the PDD and the design phases. **Except where marked as a confirmed
    | **Untrusted** | `E0002` `E0003` `E0006` `E0009` | verdict about the invoice |
    | **Warning** | `E0004` `E0005` | verdict about the invoice |
    | **No supported signature** | `N0002` (on a PDF result) | verdict about the invoice |
-   | **Could not check** | *Immediately, no retry:* `N9999`; `N0001` on a PDF result; unrecognised `signatureCode`; `P2001` `P2003` `P2004` *(ETDA-side or anomalous)*; `P1002` `P1004` `P1005`; HTTP `400` `401` `404` `405` *(our-bot or config defects — they will not fix themselves)*. *Only once retries are exhausted:* `E0001` `P1999` `P2999`, HTTP 5xx, connection timeouts | **not a verdict** — an error state |
+   | **Could not check** | *Immediately, no retry:* `N9999`; `N0001` on a PDF result; unrecognised `signatureCode`; `P2001` `P2003` `P2004` *(ETDA-side or anomalous)*; `P1002` `P1004` `P1005`; HTTP `400` `401` `404` `405` *(our-bot or config defects — they will not fix themselves)*. *Only once retries are exhausted:* `E0001` `P1999` `P2999`, HTTP 5xx, **HTTP `429`/throttle**, connection timeouts | **not a verdict** — an error state |
 
    ⚠️ **Exhausted `E0001` belongs in *Could not check*, not in *Warning*.** It reports that ETDA could
    not reach a revocation source — it says nothing about the invoice (trap 3). Filing it under Warning
-   would let it inherit Warning's disposition, so a user answering Q3(a) "Warnings are acceptable" would
-   silently auto-accept invoices nobody ever managed to check. Fallback: if this proves too noisy in
+   would have let it inherit Warning's disposition, so had Q3(a) been answered "Warnings are
+   acceptable" the bot would have silently auto-accepted invoices nobody ever managed to check. Fallback: if this proves too noisy in
    practice, the fix is a longer retry window, never reclassification.
 
    ⚠️ **Verify-stage failures need outcomes too**, since an invoice rejected at submit time never
@@ -651,26 +707,30 @@ Carried into the PDD and the design phases. **Except where marked as a confirmed
    distinguishing them is not worth the complexity, fold them into *Could not check* — never into
    *No supported signature*, which asserts something about the invoice that was never established.
 
-   **Dispositions.** ⚠️ Our recommended defaults, pending Q3:
+   **Dispositions.** ✅ **Confirmed by the user 2026-08-18 as decision D4** — no longer provisional:
 
    | Disposition | Meaning | Applies to |
    |---|---|---|
    | **Accept** | passes automatically | Trusted |
    | **Reject** | fails automatically | Untrusted |
    | **Manual review** | a human decides; the bot has done its job by routing it | Warning · No supported signature · **Could not check** · `P1001` · `P1003` |
-   | **Retry** | **not a resting state** — a staging state that must resolve. On exhaustion the outcome becomes *Could not check* and the disposition *Manual review* | `E0001` · `P1999` · `P2999` · HTTP 5xx / connection timeouts. ⚠️ **Not** `400`/`401`/`404`/`405` — a malformed request, revoked key or wrong URL is not transient, and retrying wastes the run. *(If a `401` turns out to be transient at ETDA's end, see the fallback under "HTTP and authentication failures".)* |
+   | **Retry** | **not a resting state** — a staging state that must resolve. On exhaustion the outcome becomes *Could not check* and the disposition *Manual review* | `E0001` · `P1999` · `P2999` · HTTP 5xx · **HTTP `429` / throttle** · connection timeouts. ⚠️ **Not** `400`/`401`/`404`/`405` — a malformed request, revoked key or wrong URL is not transient, and retrying wastes the run. *(If a `401` turns out to be transient at ETDA's end, see the fallback under "HTTP and authentication failures".)* |
 
    **Every one of the five outcomes maps to exactly one default disposition**, and nothing may end a run
-   sitting in *Retry*. ⚠️ Fallback if Q3 is still unanswered when the build starts: ship these defaults
-   **behind config**, so the user can change a mapping without a code change — the defaults are all
-   conservative (nothing auto-accepts except Trusted), so shipping them is safe even if they are later
-   revised.
+   sitting in *Retry*. ⚠️ These mappings still ship **behind config**, so a mapping can be changed without
+   a code change — D4 settles the starting values, not the mechanism. They are conservative by design
+   (nothing auto-accepts except Trusted), which at ~10 invoices/week costs about one manual review a
+   week.
 
    ⚠️ **Manual review is a disposition, not an outcome.** Everywhere this document says "manual review",
    it means the disposition — the invoice still carries whichever of the five outcomes it earned, and
    that outcome is what gets recorded. Fallback: if the eventual design has no manual queue, "manual
    review" collapses to "Reject **and** notify a human", which is materially different from a silent
    reject and must be built as such.
+
+   ⚠️ **This outcome table is the PDF mapping.** For XML, `N0001` on an `XmlSignatureResult` is
+   *No supported signature* (D4); the rest of the XML table lands with Q16. Fallback: until it does, an
+   XML result carrying any code not in the shared signature table routes to *Could not check*.
 
    The *Could not check* row is the one that is easy to lose. It must be visibly distinct in whatever
    the bot outputs, because "we don't know" is a different instruction to a human than "this invoice is

@@ -13,7 +13,9 @@ The repo **is** the workspace. Every project — `concur-cash-advance-bot/` is t
 
 ## Always resume from PROGRESS.md
 
-Before any work, read the active project's `docs/PROGRESS.md`. Two projects exist — `concur-cash-advance-bot/` and `vendor-sbn-upload-bot/` — each with its own `PROGRESS.md`; read the one for the project the user is asking about. It states the current phase, what's confirmed, what's blocked, and what's next. Don't re-derive this from guessing at file contents — `PROGRESS.md` is the source of truth for where we are.
+Before any work, read the active project's `docs/PROGRESS.md`. Three projects exist — `concur-cash-advance-bot/`, `vendor-sbn-upload-bot/`, and `invoice-signature-verification-bot/` — each with its own `PROGRESS.md`; read the one for the project the user is asking about. It states the current phase, what's confirmed, what's blocked, and what's next. Don't re-derive this from guessing at file contents — `PROGRESS.md` is the source of truth for where we are.
+
+`invoice-signature-verification-bot/` differs from the other two in one way that changes how it's designed: **it will be built by an external developer, not in-house.** The deliverable is the design package, so anything left implicit becomes a change request after the contract is signed. Its `PROGRESS.md` also carries a **Confirmed decisions** section (D1, D2, …) — decisions the user has explicitly settled, which bind later phases. A later phase contradicting one of those is a defect, not a revision.
 
 ## Use the `rpa-bot-dev` skill for all RPA/bot design work
 
@@ -38,7 +40,9 @@ Running the `rpa-design-reviewer` agent (`.claude/agents/rpa-design-reviewer.md`
 
 ## UiPath syntax — don't assume, verify
 
-**Both projects in this repo target UiPath.** Each carries its own `docs/uipath-reference.md` as the source of truth for how the platform behaves and what conventions the project has adopted. Every design must conform to its project's reference doc.
+**All three projects in this repo target UiPath.** Each carries its own `docs/uipath-reference.md` as the source of truth for how the platform behaves and what conventions the project has adopted. Every design must conform to its project's reference doc.
+
+`invoice-signature-verification-bot/` additionally carries `docs/teda-validation-api-reference.md` — a **platform-independent** reference for the external ETDA validation service it integrates with. That file is authoritative on what *ETDA* does; its `uipath-reference.md` is authoritative on how *our bot* is built. Don't conflate them.
 
 - Rules marked ✅ are **project-adopted conventions** — the project's own hard constraints. Rules marked ⚠️ / `U`-numbered are believed-but-unverified platform behavior — treat with caution, flag inline in the design with a documented fallback, and say so explicitly.
 - **Where the reference doc is silent, flag the assumption rather than guessing.** Add it to the rulebook's "Unverified platform behaviors" section with a fallback.
@@ -89,5 +93,7 @@ These are conventions adopted in `concur-cash-advance-bot/docs/uipath-reference.
 | `detailed-design.md` | Phase 4 output — step-by-step UiPath activities, reviewed per sub-phase |
 | `uipath-reference.md` | Project constraints, standard patterns, unverified platform behaviors + Lessons Learned — **the rulebook** |
 | `PROGRESS.md` | Resume file — read this first every session |
+
+`invoice-signature-verification-bot/docs/` additionally carries `teda-validation-api-reference.md` — a **platform-independent** reference for the external ETDA validation service (endpoints, result codes, limits, and the traps in interpreting them). It is authoritative on what *ETDA* does; that project's `uipath-reference.md` is authoritative on how *our bot* is built. Its `PROGRESS.md` also carries a **Confirmed decisions** section (D1, D2, …) that binds later phases.
 
 `concur-cash-advance-bot/docs/pa-desktop-reference.md` also exists but is banner-marked superseded — historical record only, see above.
