@@ -1,5 +1,28 @@
 # UiPath Reference — Invoice Signature Verification Bot
 
+> # ⛔ SUPERSEDED — NOT THE RULEBOOK
+>
+> **Decision D5 (2026-08-19) moved this project from UiPath to Power Automate Cloud.** The live rulebook
+> is **`power-automate-reference.md`**. This file is retained as a historical record and as a standby.
+>
+> **Do not enforce these rules against the PA Cloud design.** R1–R2 (single `Main.xaml`, nested
+> Sequences), R3 (Config.xlsx), R4 (Dictionary over DataTable), R8–R10 (the prologue, `Go to` avoidance,
+> `Finally` cleanup) are UiPath constructs with no PA Cloud equivalent. Applying them to a cloud flow
+> would be a defect, not a safeguard — exactly as `pa-desktop-reference.md` is to UiPath in
+> `concur-cash-advance-bot/`.
+>
+> **What did carry over**, restated in `power-automate-reference.md` as its **R14–R17**: the isolation
+> boundary and its output contract, byte integrity, no-date-arithmetic, and per-field code tables —
+> properties of ETDA and of the problem, not of UiPath. This file's **R5** (Verb+Object naming) and
+> **R7** (no credentials) also carry over, as template R13 and R6. This file's **R6** (Windows project)
+> does not carry over at all. **R11**'s consecutive-failure counter carries over only in *intent*: its
+> `Main`-scope realisation is void, replaced by a cross-run circuit breaker in
+> `power-automate-reference.md` R18, because an event-driven trigger has no batch run to abort.
+>
+> **Why it is kept rather than deleted:** D5 depends on an unverified tenant DLP policy
+> (`power-automate-reference.md` U1). If DLP blocks the HTTP connector, the design reverts here.
+
+
 Source of truth for how this bot is built in UiPath. The `rpa-design-reviewer` agent checks the
 design's **correctness** against this doc.
 

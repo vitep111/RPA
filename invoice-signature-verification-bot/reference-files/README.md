@@ -4,7 +4,7 @@
 except this README, so real supplier names, bank details, and invoice amounts never reach GitHub. I
 can still read the files locally.
 
-> **Updated 2026-08-18.** The validation service publishes a free API, and calling it rather than
+> **Updated 2026-08-20.** The validation service publishes a free API, and calling it rather than
 > driving the website is now **confirmed decision D1** (`../docs/PROGRESS.md`; detail in
 > `../docs/teda-validation-api-reference.md`). That **raised** the value of sample PDFs and **lowered**
 > the value of portal screenshots. Priorities below reflect that.
@@ -13,8 +13,8 @@ can still read the files locally.
 
 ## 1. Sample invoices — the priority
 
-These are what the external developer's integration tests run against, and what proves the bot's logic
-is right before anyone pays for a build.
+These are what the integration tests run against, and what proves the logic is right before the flow
+goes anywhere near live invoices.
 
 - **Signed and currently valid** — the happy path.
 - **No digital signature at all** — the most common real-world case, and the one designs get wrong.
@@ -32,7 +32,7 @@ rather than by reading code.
 answer the bot can give. If you have an invoice that was **tampered with after signing**, or one signed
 *after* its certificate expired, that's the sample that matters most. If you don't (and most people
 won't), we can manufacture it: take the signed-and-valid sample and alter it after the fact. That's
-precisely what ETDA's `E0002` detects. Say so if you'd like me to note that in the build brief.
+precisely what ETDA's `E0002` detects. Say so if you'd like me to note that in the Phase 6 implementation guide.
 
 *(The remaining two outcomes — Warning and "Could not check" — can't be produced by any file at all,
 since they depend on ETDA-side conditions. Those get tested against simulated responses.)*
@@ -62,8 +62,12 @@ XML invoices are in scope alongside PDF, so the same range is needed again on th
 
 - Has anyone **already requested a TEDA API key**, or is this starting from zero?
 - Which **entity/organisation** would the request be made under? ETDA's request form will ask.
-- Can the machine running the bot **reach the internet** (specifically `api-uat.teda.th` and the
-  production host), or is it on a restricted network? This decides where the bot can run at all.
+- Can your tenant's **DLP policy** allow the HTTP (or Azure Functions) connector to reach an external
+  host? Under D5 this — not a machine's network access — is what gates the whole design. **Test it
+  cheaply: a throwaway flow with an HTTP action, and try to save it.**
+- Can you get an **Azure Function** deployed? It is where the SHA-256 hash and the whole ETDA exchange
+  live. Cost is not the barrier (~43 *invoices*/month — well inside the free grant); subscription access
+  and deploy rights are.
 
 ## 3. Portal screenshots — now optional
 

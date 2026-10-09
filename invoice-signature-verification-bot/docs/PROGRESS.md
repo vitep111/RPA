@@ -12,30 +12,44 @@ service) and reading the result off the screen. This bot automates that check.
 
 ## Delivery model — read this before designing anything
 
-**This bot will be built by an external developer, not in-house** (user instruction, 2026-08-17).
+**Changed 2026-08-19: the user builds this in-house.** It was previously scoped for an external
+developer (2026-08-17); decision **D5** moving the platform to PA Cloud removed the need, since the
+user builds PA Cloud flows themselves.
 
-That changes what "done" means here. The deliverable is the **design package**, not a running bot: the
-external developer receives the PDD, the design docs, and the Phase 6 Implementation Guide, and builds
-from them alone. Consequences that bind every phase:
+What that relaxes: the "nothing may be left implicit" bar was set for a contract handoff, where an
+unanswered question becomes a change request or a bill. Building it yourself, the open questions become
+things decided during the build, and tenant-specific knowledge no longer has to be written down.
 
-- **No tacit knowledge is transferable.** Anything left implicit becomes a change request, a wrong
-  assumption, or an argument about scope after the contract is signed. Where an in-house design could
-  say "the usual mailbox", this one names it.
-- **Open items are contractual, not just design debt.** An unanswered question here is a gap the
-  developer will either guess at or bill for. Each one below carries an owner.
-- **Acceptance criteria matter more than usual.** Phase 5/6 must give the user something they can test
-  the delivered bot against without reading the developer's code.
+**What it does not relax — and this is the part worth protecting.** The traps in
+`teda-validation-api-reference.md` bite whoever builds this, in-house or not:
+
+- expired-certificate is **Trusted**, so date arithmetic silently rejects legitimate invoices;
+- `N0002`/`N0001` conflate "unsigned" with "signed in an unsupported format";
+- *Could not check* must never collapse into "unsigned", or an ETDA outage reports as a wall of
+  unsigned invoices;
+- re-saving a file manufactures `E0002`, evidence of tampering, against an innocent supplier.
+
+None of those are handover artifacts. They are the reason the design exists, and they survived both the
+platform change and the delivery-model change untouched.
+
+⚠️ One thing gets *harder* in-house, not easier: there is no second pair of eyes. A contractor would
+have read the brief and asked questions. Fallback: the reviewer loop stays mandatory, and the Phase 6
+guide is still written as if for a stranger — because in twelve months, that is who maintains it.
 
 ## Platform decision
 
-✅ **Settled 2026-08-18 — UiPath.** See decision **D2** below. The project rulebook
-`uipath-reference.md` is seeded and is now the authority on how this bot is built;
-`teda-validation-api-reference.md` remains platform-independent and authoritative on what ETDA does.
+✅ **Settled 2026-08-19 — Power Automate Cloud** (decision **D5**, superseding D2's UiPath choice).
+The live rulebook is **`power-automate-reference.md`**; `uipath-reference.md` is retained
+banner-marked as superseded, because D5 depends on an unverified tenant DLP policy and the design
+reverts to UiPath if that check fails.
+
+`teda-validation-api-reference.md` is platform-independent and was unaffected by the change.
 
 ## Confirmed decisions
 
 Decisions the user has explicitly confirmed. These are settled and bind later phases — a later phase
-that contradicts one of these is a defect, not a revision.
+that contradicts one of these is a defect, not a revision. *(One provisional entry — **D6**, marked
+inline — is recorded here because later content already depends on it, but is not yet user-confirmed.)*
 
 ### D1 — Validate via ETDA's API, not by automating the website
 
@@ -47,12 +61,14 @@ Reasons, in the order that decided it:
 1. **The bot can run unattended.** ⚠️ RPA-style UI automation typically needs a logged-in Windows
    session with a visible browser — a machine that can't be locked, that breaks if someone connects
    over RDP, and that constrains scheduling. An HTTP call runs headless on a server. *(Headless browser
-   automation does exist, so this is a statement about the usual RPA tooling — now UiPath, per D2 —
+   automation does exist, so this is a statement about the usual RPA tooling — then UiPath, per the
+   superseded D2 —
    rather than an absolute. It does not change the conclusion: headless browser driving would still
    carry every other drawback below.)*
-   ⚠️ **This reason is partly undercut by `uipath-reference.md` U4:** if Outlook desktop retrieval needs
-   an interactive Windows session anyway (Q4), the deployment is interactive regardless and reason 1
-   buys less than it appears to. D1 stands on reasons 2–5, which are unaffected.
+   ⛔ **Historical caveat, void under D5.** While the platform was UiPath this reason was undercut by
+   `uipath-reference.md` U4 (Outlook Interop needing an interactive session). D5 removed that entirely —
+   the Office 365 Outlook connector needs no session — so **reason 1 is now stronger, not weaker**. The
+   caveat returns only if the project reverts to D2.
 2. **Two of the five outcomes are untestable through the website.** *Warning* and *Could not check*
    depend on ETDA-side conditions that cannot be produced on demand. Against the API the developer
    tests them with recorded JSON; through the UI those paths ship unexercised — including the one that
@@ -69,8 +85,10 @@ Reasons, in the order that decided it:
    person using a website, and ETDA publishes the API expressly for programmatic use. Fallback, costing
    nothing: **ETDA question 9** asks them to confirm automated/bulk submission is permitted, alongside
    the key request.
-5. **Maintenance asymmetry matters more on a fixed-price external build.** A documented HTTP contract
-   changes rarely and visibly; third-party selectors break silently, after the warranty ends.
+5. **Maintenance asymmetry.** A documented HTTP contract changes rarely and visibly; third-party
+   selectors break silently. ⛔ Originally argued in terms of a fixed-price external build ("after the
+   warranty ends"); under the in-house model (D5) the argument is unchanged but the cost lands on the
+   user rather than on a contract.
 
 **Binding design constraint that follows:** the validation call is **isolated as a single logical step**
 with a defined output contract — see **implication 1** in the reference doc for what counts as isolated
@@ -95,9 +113,13 @@ user confirmed D1 without raising the two caveats offered — prior compliance s
 website process, or procurement friction over an API key — so neither is treated as blocking. Q9
 (compliance sign-off for automated bulk submission) remains open on its own merits regardless.
 
-### D2 — Platform is UiPath
+### D2 — Platform is UiPath ⛔ SUPERSEDED BY D5 (2026-08-19)
 
-**Confirmed by user, 2026-08-18.** Closes Q7. No waiver of the repo-wide `rpa-bot-dev` constraints is
+> **No longer in force.** D5 moved the platform to PA Cloud. Retained because D5 rests on an unverified
+> tenant DLP check (`power-automate-reference.md` U1) — if that fails, D2 is what the project reverts to.
+> Its consequences below describe the **UiPath** path and must not be applied to the PA Cloud design.
+
+**Confirmed by user, 2026-08-18; superseded 2026-08-19.** Closed Q7 at the time. No waiver of the repo-wide `rpa-bot-dev` constraints is
 needed: single `Main.xaml`, linear nested Sequences, Config.xlsx at startup, Dictionary over DataTable,
 Verb+Object naming, Windows project — all apply as written.
 
@@ -156,6 +178,97 @@ is what makes it the right call rather than merely the safe one. Fallback: every
 Untrusted above Could not check, so a definite bad finding auto-rejects — is recorded with the
 aggregation rule in the service reference and can be adopted later.
 
+### D5 — Platform moves to Power Automate Cloud, built in-house
+
+**Confirmed by user, 2026-08-19.** Supersedes **D2**. The bot is a **PA Cloud flow** (Office 365 Outlook
+trigger) calling an **Azure Function** that performs the whole ETDA exchange. The user builds it
+themselves; no external developer.
+
+**What drove it.** Once D1 removed the browser automation, *there is no UI automation left in this
+process* — it reads email and makes HTTP calls. That is integration work, and using an RPA robot for it
+meant paying for a licensed machine and a Windows session to do something a connector does natively.
+
+Three concrete gains:
+
+1. **`uipath-reference.md` U4 disappears.** Classic Outlook activities need Interop/MAPI with a loaded
+   profile in an interactive Windows session — the largest deployment risk in the UiPath design, and the
+   thing that partly undercut D1's own "runs unattended" reason. The Office 365 Outlook connector needs
+   none of it. The mailbox is **M365** (confirmed 2026-08-19), so the connector applies.
+2. **The trigger question mostly answers itself** — "when a new email arrives" is event-driven, so Q6's
+   outstanding half needs no polling interval.
+3. **No robot licence, no VM, no external build cost.** At ~10 invoices/week this is far better
+   proportioned.
+
+**The one hard dependency: SHA-256.** PA Cloud has no hash expression or standard action, and ETDA's
+`digest` is mandatory. Resolved by putting the hash — and the whole ETDA call — inside an **Azure
+Function**, which doubles as D1's isolation boundary. ⚠️ A third-party hashing connector was
+**rejected**: hashing requires handing it the invoice bytes, so it would send supplier invoices to an
+unrelated party, a worse version of what Q9 already scrutinises. Fallback if no Function can be had: see
+`power-automate-reference.md`, "The shape of the solution".
+
+⚠️ **D5 is conditional on two unverified checks**, and is the only decision here that can be invalidated
+by something outside our control:
+
+- **Tenant DLP policy must permit the HTTP (or Azure Functions) connector to an external host** —
+  `power-automate-reference.md` U1. Commonly blocked. **Cheap to test: build a throwaway flow with an
+  HTTP action and try to save it.**
+- **An Azure Function must be deployable** — `power-automate-reference.md` U4. ⚠️ Not to be confused
+  with `uipath-reference.md` U4, the superseded Outlook-Interop item cited elsewhere in this file. Cost is not the barrier (~43 *invoices*/month, each possibly several invocations, sits
+  inside the free grant); subscription access and deploy rights are.
+
+Fallback if either fails: **revert to D2**. `uipath-reference.md` is retained banner-marked for exactly
+this reason, and `teda-validation-api-reference.md` — the bulk of the work — is platform-independent and
+unaffected either way.
+
+⚠️ **A revert also re-opens the delivery model, and that is not automatic.** The in-house model rests on
+"the user builds PA Cloud flows themselves"; it does **not** follow that they would build a UiPath bot.
+So a DLP or Azure failure re-opens the external-developer question — tracked as **Q18** rather than left
+to be rediscovered.
+
+**Also changed by D5:** the delivery model, from external developer to in-house. See the section at the
+top of this file; the traps are the part that does *not* relax.
+
+⚠️ **Governance note.** PA Cloud is a first-class platform in repo `CLAUDE.md`. This rulebook predated
+`templates/power-automate-reference.md`; **the template now exists and the two were reconciled on
+2026-08-20** — three project rules were promoted into the template, and the template's behaviours
+V1–V5 (verified) plus V6–V7 (template-asserted, not trial-verified) were absorbed downward. The project rulebook adopts the template's R1–R13 by reference
+and numbers its own rules from R14 so IDs never collide — though citations must still be file-qualified.
+
+### D6 — A second, scheduled companion flow is permitted
+
+⚠️ **Proposed 2026-08-20, not yet explicitly confirmed by the user** — unlike D1–D5, this entry
+records the assistant's structural analysis, not a decision the user has signed off. It sits in this
+section because later design content (the breaker's untrip path, the parked-queue drain) already
+depends on it, but treat it as provisional until the user confirms it, and note it explicitly when this
+phase is presented for sign-off. Template R1 and repo `CLAUDE.md` state **one cloud flow, no child flows** — a
+rule about not splitting *one process* across artifacts via "Run a Child Flow". A **separately-triggered
+monitoring/recovery flow is a second, independent process, so it sits outside R1's scope rather than
+being an exception to it.** Recorded here so the distinction is deliberate rather than assumed. The
+reason a second flow is unavoidable is structural: it must run precisely when **no email has arrived**,
+which an event-triggered flow definitionally cannot do.
+
+It does three things nothing else can:
+
+1. **The `power-automate-reference.md` ⚠️ V7 heartbeat** — assert the main flow has run recently. A dead connection stops the trigger
+   with no run and no error, so absence-of-runs is only detectable from outside.
+2. **Untrip the circuit breaker**, by probing via the Azure Function (never ETDA directly — that would
+   breach `power-automate-reference.md` R14 and need the `apikey`).
+3. **Drain the parked queue.** A per-email trigger will not re-fire for a message it already consumed,
+   so invoices parked during an outage are stranded unless something goes back for them.
+
+⚠️ **Bounded deliberately — and the boundary needed a correction.** It carries **no *new* validation
+logic**: the drain re-enters the *same* Azure Function contract and reuses the same outcome and output
+handling as the main flow. That is a duplicated call path, and the duplication is accepted knowingly —
+the alternative is stranded invoices. What it must **never** do is grow its own verdict rules, its own
+code tables, or a second output format; if the two ever disagree about an outcome, that is a defect.
+
+⚠️ A cleaner shape exists but is unverified (`power-automate-reference.md` **U10**): have the drain
+**move the parked message back into the watched folder** so the main flow's own trigger re-fires, giving
+the companion flow no validation path at all. Fallback if the trigger does not re-fire on a moved
+message — likely, since it fires on arrival rather than folder membership — keep the re-entrant call
+above. Fallback if a second flow is refused: the
+parked queue is drained by hand and that goes in the runbook, because nothing else will do it.
+
 ## Skill in use
 
 `rpa-bot-dev` — phased RPA design assistant (Discovery → High-Level → Medium-Level → Detailed → Review
@@ -171,25 +284,34 @@ before every `docs/` commit — loop fix → re-review until PASS (zero BLOCKER/
 **Phase 1: Discovery — in progress.** The validation service has been identified and researched from
 ETDA's official documentation; findings are in `teda-validation-api-reference.md`.
 
-**Status as of 2026-08-18**, after the user's answers:
+**Status as of 2026-08-20**, after the platform change and the post-review restructure:
 
-- ✅ **Closed:** Q1, Q2, **Q3** (defaults accepted), **Q7** (UiPath — D2), **Q11** (PDF *and* XML — D3).
-- 🟡 **Partly answered:** **Q4** (Outlook desktop; mailbox, recognition rule and multi-attachment still
-  open), **Q6** (~10/week; trigger still open), **Q8** (numbers proposed, awaiting approval).
-- ⬜ **Open:** Q5, Q9, Q10, Q12, Q13, Q14, Q15, and the two new ones D3 created — **Q16** (structure
-  validation) and **Q17** (PDF/A-3 with embedded XML).
+- ✅ **Closed:** Q1, Q2, **Q3** (→ D4), **Q7** (→ D2, then **D5**), **Q11** (→ D3).
+- 🟡 **Partly answered:** **Q4** (M365 mailbox via the Outlook connector; *which* mailbox and the
+  recognition rule still open), **Q6** (~10/week; trigger now event-driven per D5), **Q8** (numbers
+  proposed, awaiting approval), **Q13** (Function config per D5 — Key Vault or app settings, managed
+  identity preferred; ownership and rotation open).
+- ⬜ **Open:** Q5, Q9, Q10, Q12, Q14, Q15, Q16, Q17.
+- 🟣 **Conditional:** **Q18** — live only if D5 reverts to UiPath (delivery model would re-open).
 
-**Q5 (where the verdict goes) is now the single largest blocker to the PDD** — it is the only unanswered
-question that shapes a whole logical phase rather than a setting.
+⚠️ **Two verification tasks now gate the platform itself**, not just a phase — see D5:
+**the tenant DLP check** and **Azure Function availability**. Both are cheap; neither is done.
+
+⚠️ **D6 also needs explicit user confirmation**, not just the assistant's structural recording — get it
+before or at Phase 2 sign-off, since the breaker's untrip path and the parked-queue drain already assume it.
+
+**Q5 (where the verdict goes) remains the single largest blocker to the PDD** — the only open question
+that shapes a whole logical phase rather than a setting. Now that the build is in-house and PA Cloud, a
+SharePoint list is the obvious default, but it is still the user's call.
 
 ## Phase status
 
-- [~] Phase 1 — Discovery (Q1, Q2, Q3, Q7, Q11 closed; Q4/Q6/Q8 partial; Q5, Q9, Q10, Q12–Q17 open)
+- [~] Phase 1 — Discovery (Q1, Q2, Q3, Q7, Q11 closed; Q4, Q6, Q8, Q13 partial; Q5, Q9, Q10, Q12, Q14–Q17 open; Q18 conditional)
 - [ ] Phase 2 — High-Level Design
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design
 - [ ] Phase 5 — Full Design Review & sign-off
-- [ ] Phase 6 — Implementation Guide (the external developer's build brief)
+- [ ] Phase 6 — Implementation Guide (the build guide — now for the user, and for whoever maintains it later)
 
 ---
 
@@ -215,16 +337,16 @@ developer's warranty. Two documented endpoints, the second of them polled, do no
 ### ⏳ Action on the critical path — request the API key now
 
 The API key comes from submitting ETDA's **Web Validation service request form** (V3) to
-`eservice@etda.or.th`. The external developer cannot meaningfully test integration code without it, and
-obtaining it is ours, not theirs.
+`eservice@etda.or.th`. No integration code can be meaningfully tested without it.
 
-Requested during design, in parallel, it costs nothing. Left until developer kickoff, it becomes paid
-dead time. **Owner: user. Not yet started as of 2026-08-18.**
+Requested during design, in parallel, it costs nothing. Left until build time, it is dead time. **Owner: user. Not yet started as of 2026-08-20.**
 
-**Nine** questions to ask ETDA in the same request (none answerable from published documents) are listed
+**Ten** questions to ask ETDA in the same request (none answerable from published documents) are listed
 at the end of `teda-validation-api-reference.md`. Two matter most: the **production host URL** is
 outright blocking for deployment, and **question 9 — is automated/bulk submission permitted?** closes
-the inference D1's **reason 4** rests on. **Rate limits** (question 2) are still worth asking but, at
+the inference D1's **reason 4** rests on. **Question 10** (added 2026-08-20) settles whether an `E0001`
+transaction is terminal — `power-automate-reference.md` R19's resubmit-not-repoll behaviour is inferred,
+not confirmed. **Rate limits** (question 2) are still worth asking but, at
 ~10 invoices/week (Q6), are no longer blocking.
 
 ### ⚠️ Findings that change what the bot must do
@@ -298,30 +420,28 @@ item rather than being silently filled in.
         in the reference doc.)* And: is a PDF carrying only a *timestamp* but no digital
         signature "signed"? *(Our default: no — a timestamp proves when a document existed, not who
         approved it.)* Both defaults are stated so silence isn't read as agreement to an unstated rule.
-- [~] **Q4. The email side.** *Owner: user.* **Partly answered 2026-08-18: Outlook desktop.** Still open,
-      and each of these changes the design:
-      - **Which mailbox** — a personal one, or a shared/functional mailbox?
+- [~] **Q4. The email side.** *Owner: user.* ✅ **Mailbox is M365**, reached by the **Office 365 Outlook
+      connector** (D5) — not Outlook desktop, and not Interop. Still open, and each changes the design:
+      - **Which mailbox** — personal, or a shared/functional one? Shared changes who owns the
+        connection (`power-automate-reference.md` ⚠️ V6) and who is affected when it expires
+        (`power-automate-reference.md` ⚠️ V7).
       - **How an invoice email is recognised** — sender list, subject pattern, a folder people drag mail
-        into, or "everything in this inbox"? *(The sibling `concur-cash-advance-bot` settled on
-        **folder membership** rather than read/unread state, which proved much more robust; worth
-        considering the same here.)*
-      - **Can one email carry several attachments**, or non-invoice ones mixed in? *(Ties to Q10.)*
+        into, or "everything in this inbox"? *(The sibling `concur-cash-advance-bot` settled on folder
+        membership rather than read/unread state, which proved far more robust.)*
+      - **Can one email carry several attachments**, or non-invoice ones mixed in? *(Ties to Q10, and to
+        Q12 — the trigger fires per email, not per attachment.)*
 
-      ⚠️ **Carried-forward risk — this project's `uipath-reference.md` U4** (carried from
-      `concur-cash-advance-bot` U1, where it is the same load-bearing risk). Classic Outlook
-      activities drive Outlook via Interop/MAPI and need Outlook installed with a **loaded mail profile
-      in an interactive Windows session**. An unattended robot in a session-0 context is the classic
-      failure. This matters more here than it first appears: **D1's leading argument was that the API
-      lets the bot run unattended** — but if the *mail* side needs an interactive session anyway, that
-      benefit is reduced (not eliminated: the validation step still gains stability, testability and
-      speed). Fallback: Microsoft 365 / Graph activities against a service mailbox, which changes the
-      auth story and needs an app registration. **Decide this before Phase 2 fixes the deployment
-      model.**
+      ⛔ **The former "Outlook desktop / Interop / interactive session" risk is void under D5** —
+      superseded `uipath-reference.md` U4 applies **only if the project reverts to D2**. Removing it was
+      D5's leading gain: the connector needs no robot machine and no Windows session.
+
 - [ ] **Q5. Where the verdict goes.** *Owner: user.* Excel/log row, reply to sender, move mail to a
       Valid/Invalid folder, notify a person, feed another system? Who consumes the result and what do
       they do with it? *Must accommodate all five outcomes, including "could not check".*
-- [~] **Q6. Volume and trigger.** *Owner: user.* **Volume answered 2026-08-18: ~10 per week.** Trigger
-      still open — scheduled (at what interval?) or started by hand?
+- [~] **Q6. Volume and trigger.** *Owner: user.* **Volume answered 2026-08-18: ~10 per week.** ✅ **Trigger effectively
+      answered by D5** — the Office 365 Outlook "when a new email arrives" trigger is event-driven, so
+      there is no polling interval to choose. What remains is only whether any *scheduled sweep* is also
+      wanted as a safety net against a missed trigger event (see `power-automate-reference.md` ⚠️ V7 and Q15 — a missed trigger event is the V7 case; `power-automate-reference.md` U7 is the *duplicate*-delivery consequence of adding a sweep).
 
       That volume is **low, and it should shape the design**: rate limits are a non-issue (ETDA question
       2 drops from blocking to routine), throughput and parallelism are non-issues, and a manual-review
@@ -329,8 +449,9 @@ item rather than being silently filled in.
       also means **the bot will spend most of its runs finding nothing**, so the "no new invoices" path
       is the *common* path, not an edge case, and must be silent rather than noisy. Fallback: if the
       trigger ends up frequent (say hourly), consider whether a quiet run should log at all.
-- [x] **Q7. Platform.** ✅ **CLOSED 2026-08-18 — UiPath.** Recorded as decision **D2**. Repo-wide
-      constraints apply unwaived; `uipath-reference.md` is seeded.
+- [x] **Q7. Platform.** ✅ **CLOSED — reopened and re-closed.** First settled 2026-08-18 as UiPath (D2);
+      **re-settled 2026-08-19 as Power Automate Cloud (D5)**, which supersedes it. Live rulebook is
+      `power-automate-reference.md`.
 - [~] **Q8. Timing values.** *Owner: user — **numbers now proposed, awaiting approval.*** At ~10
       invoices/week (Q6) every one of these is generous and costs nothing; they are sized so that a
       transient ETDA problem resolves itself without human involvement, and a real outage surfaces
@@ -338,14 +459,21 @@ item rather than being silently filled in.
 
       | Setting | Proposed | Why |
       |---|---|---|
-      | Poll interval (`P2002`) | **5 s** | the FAQ implies checks resolve in seconds |
-      | Overall poll timeout | **300 s** (60 polls) | past this, something is wrong — hand to a human rather than wait |
-      | `E0001` retry | **3 retries at +10 / +20 / +30 min** (4 calls total) | a revocation source being unreachable is a minutes-to-hours outage; a 30-minute window catches most without stalling the run |
-      | `P1999`/`P2999`/HTTP 5xx/`429` retry | **3 retries after the initial call** (4 calls total), backoff 5 s → 30 s → 120 s | standard transient-error handling |
-      | Consecutive-failure abort | **5 invoices** | counted per *invoice*, not per HTTP call (`uipath-reference.md` R11). At this volume a batch is 2–3 items, so it effectively only fires when someone submits a backlog and ETDA is genuinely down |
-      | Clustered-`400` abort threshold | ⚠️ **not yet proposed** | a `400` is our-bot request defect, counted separately from ETDA-side failures (R11). Until a number is chosen the bot **logs the clustering and does not abort** on it |
+      | Poll interval (`P2002`) | **5 s** | the FAQ implies checks resolve in seconds. **Function-side** |
+      | Per-attempt poll bound | **90 s** | ⚠️ **Re-scoped by D5.** The former "overall poll timeout **300 s**" is void — it sat exactly on the Consumption-plan Function ceiling (`power-automate-reference.md` R19, U9). One Function invocation now polls for at most 90 s, then hands back a `TransactionID` for the flow to re-call with. **Function-side** |
+      | Overall validation ceiling | **45 min** | ⚠️ **New under D5.** Total elapsed across *all* invocations, so an invoice cannot loop forever (implication 4, trap 3). Covers the 30-minute revocation window plus slack; on expiry → *Could not check* / Manual review. **Flow-side** |
+      | `E0001` retry | **3 retries, 10 min apart** (4 calls total, 30 min total wait). ⚠️ **Schedule Function-side, waiting flow-side** — the Function never sleeps for backoff (`power-automate-reference.md` R19); a 30-minute in-Function wait is impossible on Consumption. | a revocation source being unreachable is a minutes-to-hours outage; a 30-minute window catches most without stalling the run |
+      | `P1999`/`P2999`/HTTP 5xx/`429` retry | **3 retries after the initial call** (4 calls total), backoff 5 s → 30 s → 120 s. ⚠️ **Schedule Function-side, waiting flow-side** — the Function returns `retryAfterSeconds` and never sleeps for backoff (`power-automate-reference.md` R19). | standard transient-error handling, sized so a brief ETDA hiccup resolves without human involvement |
+      | `pending` re-call wait | **30 s** | how long the flow waits before asking again about an unresolved transaction. **Function-returned** |
+      | `MaxReCalls` | **20** | hard cap on re-calls per invoice, in case a fault returns `retryAfterSeconds: 0`. Exhausting it ends the invoice as *Could not check* / Manual review. **Flow-side** |
+      | Consecutive-failure **breaker** | **5 invoices** | ⚠️ **Re-scoped by D5.** Counted per *invoice/attachment*, not per HTTP call or per email, and held in a durable store **across runs** — see `power-automate-reference.md` R18 and its per-attachment note under "The shape of the solution" (gated on Q4). The old "abort the run" framing is void: an event-driven trigger gives one email per run, which may still carry several invoices, so there is no batch-level abort that protects anything. 5 consecutive unresolvable invoices now trips a breaker that parks subsequent arrivals and alerts. |
+      | Clustered-`400` threshold | ⚠️ **not yet proposed** | a `400` is an our-bot request defect, counted **separately** from ETDA-side failures (`power-automate-reference.md` R18). Until a number is chosen the flow **logs the clustering and does not trip**. |
+      | `MaxParkAttempts` | **3** | cross-run bound on the park → drain → re-park cycle, so a parked invoice can't loop forever across breaker trips. Exhausting it ends the invoice as *Could not check* / Manual review, alertable under Q15, and it leaves the parked queue (`power-automate-reference.md` R18). **Flow-side** |
 
-      ⚠️ All five are **config keys**, so changing them post-deployment is an edit, not a rebuild.
+      ⚠️ All are **configuration**, so changing them post-deployment is an edit rather than a rebuild — but
+      they do not all live in the same place: the poll interval, per-attempt bound and retry schedules are
+      **Function app settings**, the ceiling and breaker threshold are **flow config**. See the
+      Configuration ownership table in `power-automate-reference.md`.
       Fallback: if ETDA's answer to question 4 contradicts any of them, ETDA's guidance wins.
       <details><summary><em>Original question text, retained for the record — superseded by the table
       above</em></summary>
@@ -386,24 +514,55 @@ item rather than being silently filled in.
       raised **Q16** and **Q17** below.
 - [ ] **Q12. Duplicate invoices.** *Owner: user.* What happens when the same PDF arrives twice — a
       re-send, a reply-all thread, or a forwarded chain? Re-validate, or recognise and skip? Feeds Q5.
-- [ ] **Q13. API key handling.** *Owner: user.* Where does the `apikey` live, who holds it, and is it
-      rotated? Repo `CLAUDE.md` forbids hardcoded credentials, so it belongs in the config mechanism —
-      but for an **external developer** this is also a contract question: they will need a working key
-      (or a UAT key) to build against, and someone must decide whether they hold the production one at
-      all. Also: what should the bot do at runtime if the key is missing or revoked? *(Our position:
-      fatal to the run, alert immediately — every subsequent call fails identically.)*
+- [~] **Q13. API key handling.** *Owner: user.* **Largely answered by D5:** the key lives in the
+      **Function's own configuration** — Key Vault referenced by the Function, or the Function's
+      application settings, managed identity preferred over a stored secret (`power-automate-reference.md`
+      R14) — ⚠️ *not* a PA environment variable, whose value is visible to anyone who can open the
+      solution. What remains: who owns the
+      vault, and rotation. The external-developer half of this question is void (D5).
+      *Original question text:* Where does the `apikey` live, who holds it, and is it
+      rotated? Repo `CLAUDE.md` forbids hardcoded credentials, so it belongs in a secret store rather than a config cell — under D5 that is the Function's own configuration, per `power-automate-reference.md` R14.
+      Also: what should the flow do at runtime if the key is missing or revoked? *(Our position: it sets the
+      contract's run-fatality flag, which under `power-automate-reference.md` R18 trips the breaker
+      immediately rather than counting — every subsequent call would fail identically.)* ⚠️ Under D5 a **UAT key**
+      is still wanted separately from production, so the flow can be built and tested without touching
+      live traffic — see ETDA question 6.
 - [ ] **Q14. Audit-trail retention.** *Owner: user.* The design requires `TransactionID` and
       `TransactionDate` to be persisted per invoice — they are the only handle for an ETDA support
       query and the only link between an invoice and the verdict recorded against it. Where is that
       stored, for how long, and does the PDF itself need retaining alongside it? Related to Q5 but not
       answered by it: Q5 is about *reporting the verdict*, this is about *proving it later*.
 - [ ] **Q15. Who is alerted when the run itself fails.** *Owner: user.* Distinct from Q5. A run-fatal
-      condition — `401`/`404`/`405`, any undocumented 4xx **except `429`/throttle responses**, clustered
-      `400`s, or the Q8 threshold; the
-      full list is the run-fatality flag in implication 1 — kills the **whole run** rather than one
-      invoice, and unresolved invoices must then be reported as "Could not check" rather than dropped.
+      condition — the **per-invocation run-fatality flag** in implication 1 (`401`/`404`/`405`, or any
+      undocumented 4xx **except `429`/throttle responses**) — kills the **whole run** rather than one
+      invoice. ⚠️ *(Pre-D5 framing; re-scoped a few lines below — under D5 a run is one invoice, so
+      "kills the run" and "trips the breaker" are the same event.)* Clustered `400`s and the Q8 consecutive-failure threshold are a **separate,
+      cross-invocation** condition — a single call can't set the flag for them — and are owned instead by
+      `power-automate-reference.md` R18's breaker, which trips immediately on the flag or on reaching its
+      own threshold. Either path, unresolved invoices must then be reported as "Could not check" rather
+      than dropped.
       Who gets told, and how quickly? An invoice that vanishes because the run died is worse than one
-      reported as unchecked: nobody knows to look at it. *(`P1999`/`P2999` are **per-invoice** ETDA
+      reported as unchecked: nobody knows to look at it.
+
+      ⚠️ **D5 re-scopes "the run".** With an event-driven trigger at concurrency 1, a run is **one
+      invoice** — so "kills the whole run" no longer means a batch is lost. Per
+      `power-automate-reference.md` R18, a run-fatal condition now means *this invoice fails **and** the
+      cross-run circuit breaker trips*. Q15 must therefore answer **three** notifications, not one:
+
+      1. **A tripped breaker** — the flow has stopped validating and is parking arrivals. Most urgent.
+      2. **The parked queue** — how anyone learns invoices are waiting, and who confirms they drained
+         after the breaker cleared.
+      3. **An individual invoice** ending *Could not check* — including one that exhausted
+         `MaxValidationWaitMinutes`, `MaxReCalls` (`power-automate-reference.md` R19) or `MaxParkAttempts`
+         (`power-automate-reference.md` R18) rather than failing outright.
+
+      ⚠️ **And a worse case than any failed run: no run at all.** Per `power-automate-reference.md`
+      ⚠️ V7, a PA Cloud connection expires after ~90 days idle and **nothing alerts** — the Outlook
+      trigger simply stops firing. Invoices arrive, nothing happens, no run appears in history, no error
+      is raised. It is indistinguishable from a quiet week, and this bot has quiet weeks by design
+      (~10/week, Q6). **Any answer to Q15 that only watches *failed* runs cannot see this.** Fallback: a
+      scheduled heartbeat asserting the flow has run recently, or a periodic reconciliation of invoices
+      received against invoices validated. *(`P1999`/`P2999` are **per-invoice** ETDA
       errors, not fatal-to-run — but see the abort threshold in Q8.)*
 - [ ] **Q16. Does *structure* validation count, or only signatures?** *Owner: user.* **Raised by D3.**
       For XML, ETDA runs a second, independent check: whether the document conforms to a **registered
@@ -424,6 +583,13 @@ item rather than being silently filled in.
       human reading the portal today would see. Needs a real sample to settle properly — see the drop
       zone.
 
+- [ ] **Q18. Delivery model if D5 reverts.** *Owner: user.* **Conditional — only live if D5's DLP (`power-automate-reference.md` U1)
+      or Azure Function (`power-automate-reference.md` U4) check fails.** In-house build was chosen because the user builds PA Cloud
+      flows; it does not follow that they would build a **UiPath** bot. If the project reverts to D2,
+      does it also revert to an external developer? Recorded now so a revert does not silently
+      resurrect a settled-looking question. Fallback: assume external-developer, since that was the
+      position when D2 was live.
+
 ### Resolved design question
 
 - **"Does this need a website at all?"** — raised 2026-08-17, **resolved the same day** and now settled
@@ -439,8 +605,8 @@ item rather than being silently filled in.
 README). Everything in it is **gitignored except the README**; real invoices carry supplier names, bank
 details, and amounts and must not reach GitHub.
 
-Still valuable now that the API is the target: **sample PDFs** are what the external developer's
-integration tests run against. But note carefully **which outcome each sample actually proves** — the
+Still valuable now that the API is the target: **sample PDFs** are what the integration tests run
+against. But note carefully **which outcome each sample actually proves** — the
 obvious trio does *not* cover five outcomes, or even three:
 
 **PDF samples:**
@@ -466,7 +632,7 @@ it is the only way to catch trap 1 empirically rather than by code review.
 
 ⚠️ **Untrusted has no natural sample.** The practical route is to take the signed-and-valid sample and
 alter it after signing (change a byte, append a page) — that is exactly what `E0002` detects, so it is a
-reliable way to manufacture the case. Worth stating in the build brief; otherwise the most
+reliable way to manufacture the case. Worth stating in the Phase 6 implementation guide; otherwise the most
 consequential verdict the bot can issue is the one path nobody tested. *Warning* and *Could not check*
 must be driven from simulated responses built off the code tables in the reference doc.
 

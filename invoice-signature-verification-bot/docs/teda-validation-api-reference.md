@@ -2,12 +2,13 @@
 
 Facts about the **external service this bot depends on**, gathered 2026-08-17. This is a
 platform-independent document: it describes ETDA's service, not our bot. It stays true regardless of
-whether the bot is eventually built in UiPath or anything else, and it is the document the external
-developer integrates against.
+whichever platform the bot is built on — its substance survived the UiPath→PA Cloud change (D5), though its platform-realisation notes were updated, and is
+the document any implementation integrates against.
 
-> This is **not** the project rulebook. That is **`uipath-reference.md`**, seeded 2026-08-18 once
-> decision D2 settled the platform — it governs how *our bot* is built, while this file stays
-> authoritative on what *ETDA* does.
+> This is **not** the project rulebook. That is **`power-automate-reference.md`** (per decision **D5**,
+> 2026-08-19) — it governs how *our flow* is built, while this file stays authoritative on what *ETDA*
+> does. `uipath-reference.md` is retained banner-marked as superseded, and is the standby if D5's DLP
+> check fails.
 
 ## Confidence legend
 
@@ -46,8 +47,7 @@ available written authority", not as "verified".
 
 **This removes the most fragile component from the design.** The manual process uploads a PDF to a web
 form; a bot doing the same would have to drive a third-party page it doesn't control, with selectors
-that break whenever ETDA restyles the site — and that breakage would land outside the external
-developer's warranty. The API replaces that with a documented HTTP contract.
+that break whenever ETDA restyles the site. The API replaces that with a documented HTTP contract.
 
 **Design decision — confirmed by the user 2026-08-17 as D1 in `PROGRESS.md`: the bot calls the API and
 does not automate the website.** The website remains useful as the human fallback and as the thing to
@@ -75,14 +75,13 @@ Fallback: re-check the numbering before quoting a clause in anything contractual
 📄 The API key is not self-service. It is obtained by submitting the **Web Validation service request
 form** to ETDA.
 
-⚠️ Consequence: the external developer cannot write or meaningfully test integration code without it.
-Fallback if the key is slow to arrive: the developer can build and unit-test the request construction,
-SHA-256 hashing, polling loop, and result-parsing logic against **recorded sample responses** taken
-from this document, then do a single integration pass when the key lands. That limits, but does not
-eliminate, the delay.
+⚠️ Consequence: no integration code can be meaningfully tested without it. Fallback if the key is slow
+to arrive: build and unit-test the request construction, SHA-256 hashing, polling loop, and
+result-parsing logic against **recorded sample responses** taken from this document, then do a single
+integration pass when the key lands. That limits, but does not eliminate, the delay.
 
-**This is on the critical path and it is ours to obtain, not the developer's.** Requested during
-design, in parallel, it costs nothing. Left until kickoff, it becomes paid dead time.
+**This is on the critical path.** Requested during design, in parallel, it costs nothing. Left until
+build time, it is dead time.
 
 ---
 
@@ -201,6 +200,10 @@ gateway fault at ETDA), downgrade it to a bounded retry; if a `500` proves persi
 transient, promote it to fatal-to-run. Both are one-line config changes if the retry policy is
 parameterised, which is why Q8 in `PROGRESS.md` covers them.
 
+⚠️ **Under D5 "the run" is one invoice** — see `power-automate-reference.md` R18, which reinterprets
+fatal-to-run as *fatal to this invoice **and** trip the circuit breaker*. The batch framing below is
+retained because it still describes what the codes mean; only the blast radius changed.
+
 ⚠️ **Fatal-to-run and per-invoice reporting must not be confused.** A `401`/`404`/`405` aborts the run,
 but the invoices already picked up and not yet resolved still need to be **reported as "Could not
 check"** rather than silently dropped. An invoice that vanishes because the run died is worse than one
@@ -214,7 +217,10 @@ cases. A parser that assumes `ResultCode` always exists will throw rather than r
 **run**): a `400` can be provoked by one malformed request — an odd filename, an unusual byte in a
 field — so the next invoice may well succeed, whereas an unrecognised 4xx more likely means the
 contract itself has changed. Fallback: if `400`s cluster across many invoices rather than appearing
-singly, treat that as the contract having changed and abort, per the Q8 threshold.
+singly, treat that as the contract having changed — via the **clustered-`400`/request-defect counter**
+in `power-automate-reference.md` R18, which today only **logs the clustering and does not trip**, since
+the threshold itself (Q8) is unchosen. Once Q8 settles the number, this becomes a trip condition rather
+than a log line.
 
 ❓ **Nothing is documented about throttling responses (e.g. `429`), connection timeouts, or TLS
 requirements.** ⚠️ Carve-out: a **`429`** (or any explicit throttle response) is transient by definition
@@ -248,7 +254,7 @@ describing ETDA's own service-to-service calls:
 
 They appear in the same document, in the same format, and **some of them take no `apikey`** — which
 makes them look easier to use. They are not part of the public contract and must not be called. State
-this explicitly in the developer brief: `verify-extract` in particular looks like a drop-in alternative
+this explicitly in the implementation guide: `verify-extract` in particular looks like a drop-in alternative
 to `verify` and is not one.
 
 ---
@@ -454,7 +460,7 @@ So `certExpireDate` in the past is **completely normal** for a legitimately sign
 invoice signed more than a certificate lifetime ago will show one.
 
 **Rule: the verdict comes from `signatureCode`. `certBeginDate` / `certExpireDate` are for reporting
-and audit trail, never for computing pass/fail.** State this in the developer brief in exactly those
+and audit trail, never for computing pass/fail.** State this in the implementation guide in exactly those
 terms, because a developer implementing "check the valid date" from the requirement text alone will get
 it wrong, and the failure is silent — the bot returns a confident, well-formatted, incorrect answer.
 
@@ -519,7 +525,7 @@ service can return — versus **"Not LTA"** in the LTA table, which is unremarka
 nonsense, and the specific failure mode is alarming: `ltaCode = "E0002"` misread through the signature
 table becomes **"this invoice was tampered with after signing."** Fallback: **each code field must be
 interpreted by its own table.** Name the lookup functions after the field (`mapSignatureCode`,
-`mapLtvCode`), not after the code shape, and say so in the developer brief.
+`mapLtvCode`), not after the code shape, and say so in the implementation guide.
 
 ## Trap 5 — "no signature" and "we couldn't check" must not share a bucket
 
@@ -590,7 +596,8 @@ from this 2022 document alone.
 This does not affect our PDF path, which is documented consistently throughout. ⚠️ It bears more heavily
 on the **XML** path now in scope (D3): the FHIR block and `XMLfhirResult` are exactly the areas where the
 2022 spec visibly lags, so XML fields are the ones most exposed to drift. Fallback: this is what
-`uipath-reference.md` U5 exists for — parse defensively, never bind to a fixed type. It also affects how
+`power-automate-reference.md` R14's isolation exists for — parse defensively inside the Function, never
+bind to a fixed type. It also affects how
 much weight a 📄 mark deserves.
 
 ---
@@ -610,16 +617,25 @@ Carried into the PDD and the design phases. **Except where marked as a confirmed
      (`P1001` invalid file type, `P1003` too large) — those two are not outcomes but must still be
      reportable distinctly, per implication 5;
    - the **disposition** (Accept / Reject / Manual review / Retry);
-   - a **run-fatality flag** — whether this failure is item-scoped or fatal to the whole run
-     (`401`/`404`/`405`, any undocumented 4xx **except `429` / explicit throttle responses**, clustered
-     `400`s, or the Q8 consecutive-failure threshold — see "HTTP and authentication failures"). Without this the caller would have to read
-     HTTP codes to know whether to abort, which the boundary forbids. ⚠️ Two of those conditions are
-     **cross-invocation** — a single call cannot know it is the hundredth consecutive failure — so
-     **the consecutive-failure counter is owned by the step**, and no caller may keep its own tally by
-     inspecting HTTP codes. **UiPath realisation (D2): `uipath-reference.md` R11** — a `Main`-scope
-     variable initialised in the R8 prologue and written only by this Sequence, *not* a
-     Sequence-scoped variable, which would reset on every entry and stop the threshold ever firing.
-     R11 also fixes the reset semantics that make it *consecutive* rather than cumulative;
+   - a **run-fatality flag** — whether *this single invocation's* failure is item-scoped or immediately
+     fatal (`401`/`404`/`405`, or any undocumented 4xx **except `429` / explicit throttle responses**).
+     These are the only conditions one invocation can determine on its own, and they are what the flag
+     actually carries. Without this the caller would have to read HTTP codes to know whether to abort,
+     which the boundary forbids. ⚠️ **Clustered `400`s and the Q8 consecutive-failure threshold are
+     deliberately *not* part of this per-invocation flag** — a single call cannot know it is the hundredth
+     consecutive failure, so no caller may keep its own tally by inspecting HTTP codes, and the flag must
+     not pretend to cover what only a cross-invocation observer can see. **Platform realisation (D5):
+     `power-automate-reference.md` R18** — a **cross-run circuit breaker in a durable state store, read
+     and written by the flow**. Its **consecutive-failure counter** is keyed on this contract's **outcome
+     and failure-blame fields** across many invocations — never an ETDA code or HTTP status. The
+     **run-fatality flag is handled separately**: when set, it trips the breaker **immediately**, bypassing
+     the counter entirely (`power-automate-reference.md` R18's Trip row), since a revoked key or wrong URL will fail every subsequent
+     invocation identically and waiting for a count is pointless. Not a contract round-trip, and not
+     Function-held: a Consumption Function is stateless between invocations.
+     `power-automate-reference.md` R18 also fixes the reset semantics that make it *consecutive* rather
+     than cumulative, and splits ETDA-side failures from our-bot request defects across two counters.
+     *(The superseded UiPath realisation is `uipath-reference.md` R11, where the trap was Sequence scoping
+     rather than statelessness — different platform, same silent failure: the threshold never fires.)*;
    - the **per-signature entries** — `signatureCode`, `signatureTypeCode` (so `E0007`/`E0008` can be
      surfaced as the code tables require), certificate fields, `signingTime`, and `ltvCode`/`ltaCode`
      if those are to be reportable at all. ✅ Timestamp entries (`pdfTimeStampingResult`) are omitted
@@ -648,7 +664,11 @@ Carried into the PDD and the design phases. **Except where marked as a confirmed
    than assuming a clean swap.
 
    ⚠️ Fallback on the boundary itself: if a separate component is awkward in the chosen platform, a
-   named Sequence is sufficient — the requirement is the contract, not the packaging.
+   named Sequence (UiPath) or Scope (PA Cloud) is sufficient — the requirement is the contract, not the
+   packaging. ⚠️ Under D5 specifically, this fallback doesn't remove the Azure Function: PA Cloud has no
+   SHA-256 capability of its own (`power-automate-reference.md`, "The shape of the solution"), so the
+   Function stays regardless of how the surrounding flow packages the call around it (R14 is the
+   isolation-boundary rule the Function realises, not the source of the no-SHA-256 fact).
 
    **Do not build both paths** — that doubles the build cost to insure against something there is no
    evidence will happen.
@@ -659,13 +679,16 @@ Carried into the PDD and the design phases. **Except where marked as a confirmed
    round-trip through a library that rewrites the file will either produce `P1002` (digest mismatch) or
    — far worse — a genuine `E0002`, **"document was modified after signing"**. That is our own bot
    fabricating evidence of tampering against an innocent supplier. Note this explicitly in the
-   developer brief; it is the least obvious requirement in this document.
+   implementation guide; it is the least obvious requirement in this document.
    ⚠️ The same risk exists upstream, outside our control: mail gateways and AV scanners that rewrite
    attachments will break signatures before the bot ever sees the file. Fallback: if `E0002` appears at
    an implausible rate on first run, suspect the mail path before suspecting the suppliers.
 
 3. **SHA-256 hashing capability is mandatory**, not optional — the `digest` field is required.
-   Per D2 this means the **`UiPath.Cryptography.Activities`** package — a confirmed dependency. ❓ Confirm it emits **lowercase hex** rather than Base64 or
+   ⚠️ Per **D5** this is the reason an **Azure Function** exists at all: PA Cloud has no SHA-256
+   expression or standard action, so the hash — and with it the whole ETDA call — moves into code.
+   *(Under the superseded D2 it was the `UiPath.Cryptography.Activities` package.)* ❓ Confirm the
+   implementation emits **lowercase hex** rather than Base64 or
    uppercase, since `P1002` is the only feedback on getting it wrong. Fallback: normalise the hash
    string to lowercase hex explicitly rather than trusting the activity's default.
 
@@ -758,7 +781,7 @@ To be asked when submitting the API access request, since none are answerable fr
 4. What is the maximum time a transaction can sit at `P2002` before `P2004`, and what polling interval
    does ETDA recommend?
 5. Does the API enforce the same 20,480 KB PDF limit as the portal, and is that decimal or binary KB?
-6. Is the UAT environment (`api-uat.teda.th`) available for the developer's integration testing, and
+6. Is the UAT environment (`api-uat.teda.th`) available for integration testing, and
    does it need a separate key from production?
 7. Are password-protected / encrypted PDFs supported, and which code is returned for one?
    *(Feeds the malformed-input question — `PROGRESS.md` Q10.)*
@@ -767,3 +790,8 @@ To be asked when submitting the API access request, since none are answerable fr
 9. **Is automated / bulk submission via the API permitted?** The terms of service neither allow nor
    forbid it, and the whole design assumes it is fine. Confirming it in writing while requesting the key
    costs nothing and closes the one inference D1's reason 4 rests on.
+10. **Is a transaction that returned `E0001` ("certificate status cannot be proven right now") terminal,
+    or can it be re-polled with its existing `TransactionID`?** `power-automate-reference.md` R19 assumes
+    it is terminal — that re-polling would return `E0001` forever and burn a retry budget without
+    re-checking anything — and resubmits instead. Confirming this settles whether the resubmit path is
+    necessary or whether a cheaper poll-only retry would do.
