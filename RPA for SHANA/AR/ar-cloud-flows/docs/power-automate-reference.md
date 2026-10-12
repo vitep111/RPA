@@ -12,8 +12,12 @@
 > The body below is the template's text unchanged, so where it says "this template" read "the template
 > this file was copied from", and its "will renumber" note is satisfied by numbering project rules from R14.
 >
-> **Nothing project-specific has been recorded yet** — the project is at Phase 1 (Discovery), see
-> `PROGRESS.md`. Every rule below is the template's, unchanged.
+> **Project-specific additions so far:** unverified platform behaviours **P7–P10** in section 3
+> (added 2026-10-12 during Discovery). They continue the template's P1–P6 numbering but are
+> **project-scoped**: a future template P7 is a different rule, so cite this file's by file name.
+>
+> No project rules (R14+) yet, and no project-specific Lessons Learned (L1–L3 in section 5 are the
+> template's). Everything else below is the template's text, unchanged. Project status: see `PROGRESS.md`.
 
 **This rulebook governs Power Automate CLOUD flows only.** It has nothing to do with Power
 Automate Desktop. `concur-cash-advance-bot/docs/pa-desktop-reference.md` is a ⛔ superseded
@@ -216,6 +220,47 @@ flag high-volume phases for a live test.
 
 **P6 — Behaviour of `update_flow` on a flow that is currently running** is unknown. *Fallback:*
 stop the flow before editing anything non-trivial.
+
+### Project-specific unverified behaviours (added 2026-10-12, Discovery)
+
+These come from this project's process, not from the template. Each one changes the design if it turns
+out false, so each needs settling before the design leans on it, not discovering at build time.
+**None of them may be tested in the tenant yet.** `CLAUDE.md` ("PA Cloud tooling") keeps the tenant
+untouched until Phase 6, and an AI Builder prompt or model is a tenant artifact just as a flow is. A
+pre-Phase-6 feasibility test needs an explicit user-approved exception with bounds (`PROGRESS.md` D8)
+and a non-Default environment (`docs/power-automate-reference.md` R11).
+
+**P7 — AI Builder can classify and extract from these PDFs.** The documents are Thai, English, or
+mixed, and arrive as both digital PDFs and scans. It is not established that AI Builder's document
+processing models read Thai reliably, or that one approach handles both scans and digital files.
+*Options to test, in order:* (1) an AI Builder **prompt** that takes the PDF as input and returns the
+document type plus the fields as JSON; (2) an AI Builder **document processing** custom model, one per
+document type, with a separate classification step. *Fallback if neither is good enough:* an external
+OCR/extraction service, reached through a custom connector or a connection reference that holds the
+credential, so no key appears in the flow definition (`docs/power-automate-reference.md` R6). It needs
+Premium, a DLP check and a data-residency check, so it is a recorded decision, not a silent swap.
+
+**P8 — The trigger can watch a Microsoft 365 group's mailbox.** `AccountReceivable@pttep.com` is a
+Microsoft 365 group, not a user or shared mailbox. The Office 365 Outlook shared-mailbox trigger is
+believed not to work reliably against a group address, and the Office 365 Groups Mail trigger's status
+and behaviour are unconfirmed. *Fallback:* make the flow's service account a member of the group,
+subscribed so that group mail is delivered to its own inbox, and trigger on that inbox with the
+standard new-email trigger. **If this fallback is used, P10's new-email fallback becomes the default:** a
+reply action on the service account's copy of the message would address the original sender, which is
+the leak `PROGRESS.md` D2 forbids.
+
+**P9 — A password-protected PDF can be told apart from other failures.** The working assumption is
+that the AI Builder action fails on an encrypted PDF, and that the failure can be caught per
+attachment. Whether the error says "password" or "encrypted" is unknown. *Fallback:* treat any failure
+to read a PDF as "could not be read", and word the reply to cover both cases: password-protected or
+damaged, please send an unlocked or readable copy.
+
+**P10 — A reply can be addressed to the group alone and still sit in the original thread.** The
+result must go only to `AccountReceivable@pttep.com` (`PROGRESS.md` D2). It is unconfirmed whether
+Office 365 Outlook's reply action lets the recipient list be replaced rather than added to, and whether
+the reply threads under the original email in the group's conversation view. *Fallback:* send a new
+email to the group with the original subject prefixed `RE:` and the original sender, date and subject
+quoted at the top of the body.
 
 ---
 
