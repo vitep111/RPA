@@ -9,11 +9,20 @@
 > A PA Cloud design is still checked jointly against `templates/power-automate-reference.md`. Rule
 > IDs are file-scoped (see "Rule IDs are file-scoped" below): cite `<file> R<n>`, never a bare ID across files.
 >
-> The body below is the template's text unchanged, so where it says "this template" read "the template
+> Apart from the additions listed below, the body is the template's text unchanged, so where it says "this template" read "the template
 > this file was copied from", and its "will renumber" note is satisfied by numbering project rules from R14.
 >
-> **Nothing project-specific has been recorded yet** — the project is at Phase 1 (Discovery), see
-> `PROGRESS.md`. Every rule below is the template's, unchanged.
+> **Project-specific additions so far** (all 2026-10-12, Discovery):
+>
+> - **R14** in section 1 ("Project rules") — no run record, a recorded exception to R10.
+> - **P7–P10** in section 3. They continue the template's P1–P6 numbering but are **project-scoped**: a
+>   future template P7 is a different rule, so cite this file's by file name. P7 passed the user's own
+>   test (user-reported), but stays ⚠️ until its approach and sample coverage are recorded; P8–P10
+>   remain unverified.
+> - **L4** in section 5 — what the P7 test changed. L1–L3 are the template's.
+>
+> Apart from this header block, the title's project suffix, and the additions listed above, everything
+> else below is the template's text, unchanged. Project status: see `PROGRESS.md`.
 
 **This rulebook governs Power Automate CLOUD flows only.** It has nothing to do with Power
 Automate Desktop. `concur-cash-advance-bot/docs/pa-desktop-reference.md` is a ⛔ superseded
@@ -118,6 +127,31 @@ activity at least shows its type and properties — a PA Cloud expression refere
 `outputs('Compose 5')` is unreadable *and* becomes a rename hazard, since renaming an action does
 not update the expressions that reference it.
 
+### Project rules (R14 onward)
+
+**R14 — No run record: a recorded exception to R10.** This project does not apply R10 (this file's
+copy) or `templates/power-automate-reference.md` R10. The `Finally` Scope writes no run record and no log
+store exists. The user decided this on 2026-10-12 ("no need for log"; `PROGRESS.md` D7), after being told
+of the conflict with R10.
+
+*Accepted consequence* (`docs/power-automate-reference.md` V3): a run that succeeds but sends a wrong
+reply, or sends none, leaves no evidence beyond the reply itself, because the run history of a succeeded
+run does not show what its actions produced. Failed runs stay visible in the run history.
+
+*Still to design:* with no record, a failed run is only noticed if someone opens the run history. Phase 2
+or 3 must decide how a failure becomes visible, for example the `Catch` Scope notifying an owner. That is
+an open design point, not decided here. The `[run record — see R10]` step in section 4's Try/Catch/Finally
+pattern is omitted for this project. A `Finally` Scope is still kept, with `Configure run after` set to
+all four outcomes as R3 requires, but it holds cleanup only: R3's "and the run record" clause and the
+pattern's "Finally - Write Run Record" Scope name do not apply here.
+
+⚠️ *Assumption:* "failed runs stay visible" depends on how long the platform keeps run history. The
+retention period is not established in this rulebook (believed to be roughly 28–30 days, unverified).
+With no log, run history is the only record of a failure, so the failure-visibility design point above
+must not rely on someone checking it within that window. *Fallback:* design failure visibility as an
+active notification (for example from the `Catch` Scope), so it does not depend on retention at all. Revisit R14 if a silent bad reply is ever
+reported.
+
 ---
 
 ## Rule IDs are file-scoped
@@ -217,6 +251,56 @@ flag high-volume phases for a live test.
 **P6 — Behaviour of `update_flow` on a flow that is currently running** is unknown. *Fallback:*
 stop the flow before editing anything non-trivial.
 
+### Project-specific unverified behaviours (added 2026-10-12, Discovery)
+
+These come from this project's process, not from the template. Each one changes the design if it turns
+out false, so each needs settling before the design leans on it, not discovering at build time.
+
+**P7 passed the user's own test** (2026-10-12), but how far that test reaches is not yet recorded — see
+P7 and L4. That was the user's own test, outside this project's process; it grants the assistant nothing. **None of P7–P10 may
+be tested in the tenant by the assistant** — including any test to confirm P7's coverage. `CLAUDE.md` ("PA Cloud tooling") keeps the tenant
+untouched until Phase 6, and a test artifact is a tenant artifact just as a flow is. A pre-Phase-6 test
+would need an explicit user-approved exception with bounds — the shape is in `PROGRESS.md` D8, now
+closed — and a non-Default environment (`docs/power-automate-reference.md` R11).
+
+**P7 — AI Builder can classify and extract from these PDFs.** ⚠️ **Passed the user's own test,
+2026-10-12 — scope not yet recorded.** The user reported: "I tested AI builder and it works. No concern
+on this." Not yet recorded: which AI Builder approach the test used, whether it covered classification
+as well as extraction, and which kinds of sample it covered (Thai, English, mixed, scanned, digital) —
+`PROGRESS.md` Q14. P7 stays ⚠️ until Q14 is answered; it becomes 🔬 for whatever the test is confirmed
+to have covered, and the design must use the approach that was tested. The risk: the documents are
+Thai, English, or mixed, and arrive as both digital PDFs and scans, and it is not established beyond
+the user's report that AI Builder reads Thai reliably or that one approach handles both scans and
+digital files. *Approaches, in the order to consider them:* (1) an AI Builder **prompt** that takes the PDF as input and returns the
+document type plus the fields as JSON; (2) an AI Builder **document processing** custom model, one per
+document type, with a separate classification step. *Fallback if neither is good enough:* an external
+OCR/extraction service, reached through a custom connector or a connection reference that holds the
+credential, so no key appears in the flow definition (`docs/power-automate-reference.md` R6). It needs
+Premium, a DLP check and a data-residency check, so it is a recorded decision, not a silent swap. This
+fallback stays live until Q14 confirms the test covered Thai, mixed and scanned samples.
+
+**P8 — The trigger can watch a Microsoft 365 group's mailbox.** `AccountReceivable@pttep.com` is a
+Microsoft 365 group, not a user or shared mailbox. The Office 365 Outlook shared-mailbox trigger is
+believed not to work reliably against a group address, and the Office 365 Groups Mail trigger's status
+and behaviour are unconfirmed. *Fallback:* make the flow's service account a member of the group,
+subscribed so that group mail is delivered to its own inbox, and trigger on that inbox with the
+standard new-email trigger. **If this fallback is used, P10's new-email fallback becomes the default:** a
+reply action on the service account's copy of the message would address the original sender, which is
+the leak `PROGRESS.md` D2 forbids.
+
+**P9 — A password-protected PDF can be told apart from other failures.** The working assumption is
+that the AI Builder action fails on an encrypted PDF, and that the failure can be caught per
+attachment. Whether the error says "password" or "encrypted" is unknown. *Fallback:* treat any failure
+to read a PDF as "could not be read", and word the reply to cover both cases: password-protected or
+damaged, please send an unlocked or readable copy.
+
+**P10 — A reply can be addressed to the group alone and still sit in the original thread.** The
+result must go only to `AccountReceivable@pttep.com` (`PROGRESS.md` D2). It is unconfirmed whether
+Office 365 Outlook's reply action lets the recipient list be replaced rather than added to, and whether
+the reply threads under the original email in the group's conversation view. *Fallback:* send a new
+email to the group with the original subject prefixed `RE:` and the original sender, date and subject
+quoted at the top of the body.
+
 ---
 
 ## 4. Standard patterns
@@ -300,3 +384,12 @@ until it costs you a day looking for output that went somewhere else. Hence ✅ 
 API hard-rejects anything above 50. Believing the schema yields a 400 at best, and at worst a
 silent single-page inventory reported as complete. Verify limits against the service, not the
 client.
+
+**L4 — The biggest feared risk was largely answered already by the person closest to the data** (project
+addition, 2026-10-12). Discovery treated AI Builder on Thai and scanned PDFs (P7) as the risk most likely
+to change the design, and proposed a bounded pre-Phase-6 test exception (`PROGRESS.md` D8) to settle it.
+The user had already tested AI Builder and reported that it works. What was assumed: an open feasibility
+risk that nobody had tried. What is true: the user had tried it and it worked, though the approach and
+sample coverage are still to be recorded (`PROGRESS.md` Q14), so P7 stays ⚠️ until then. Ask what the
+user has already tried before designing a test for it — and when they have, record exactly what it
+covered before treating the risk as closed.
