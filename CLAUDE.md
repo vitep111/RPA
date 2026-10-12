@@ -19,9 +19,17 @@ Before any work, read the active project's `docs/PROGRESS.md`. Four projects exi
 
 ## Use the `rpa-bot-dev` skill for all RPA/bot design work
 
-Any task involving UiPath, Power Automate cloud flows, Power Automate Desktop, RPA, bot development, process automation, or "let's automate X" goes through the `rpa-bot-dev` skill. It is the only skill installed in this repo (`.claude/skills/rpa-bot-dev/SKILL.md`) — deliberately. Don't install or restore other skills.
+Any task involving UiPath, Power Automate cloud flows, Power Automate Desktop, RPA, bot development, process automation, or "let's automate X" goes through the `rpa-bot-dev` skill (`.claude/skills/rpa-bot-dev/SKILL.md`).
 
-The skill enforces a **phased process** (Discovery → High-Level Design → Medium-Level Design → Detailed Design → Full Review & Sign-off → Implementation Guide). Rules:
+Only these skills are installed in this repo, deliberately — don't install or restore others without the user asking:
+
+- **`rpa-bot-dev`** — all design and build work, as above.
+- **`diagram-design`** (`.claude/skills/diagram-design/`, vendored from `cathrynlavery/diagram-design` v2.6 — `metadata.version` in its `SKILL.md`, upstream commit `7a2e221` — via the user's `skills-hub`, added 2026-10-12) — editorial HTML/SVG diagrams for presenting a design to people (stakeholder walkthroughs, slides, a polished process map). It is **presentation only**: the Mermaid phase-flow in `high-level-design.md` (and its `phase-flow.mmd` copy) and the per-phase Mermaid in `medium-level-design.md` stay the authoritative diagrams that `rpa-bot-dev` requires and the reviewer checks. A diagram-design rendering is derived from those, never a replacement for them, and must be regenerated if the flow it depicts changes.
+- **`caveman`**, with its sibling modes **`ultracave`** and **`megacave`** (`.claude/skills/{caveman,ultracave,megacave}/`, vendored from `JuliusBrussee/caveman` upstream commit `2e08b91` via the user's `skills-hub`, added 2026-10-12) — a terse **chat voice**, on only when the user asks (`/caveman`, "be brief") and off at "stop caveman" / "normal mode"; `ultracave` and `megacave` are explicit-invocation only (`/ultracave` or `/caveman ultra`, `/megacave` or `/caveman wenyan`). It governs **chat only**. Its own rules already exempt anything persisted, and here that is binding: PDDs, design docs, rulebooks, `PROGRESS.md`, commit messages, PR descriptions, and prompts to the `rpa-design-reviewer` are written in full prose, whatever mode the chat is in. Upstream's `/caveman-compress` carve-out does not apply here: no repo file is ever compressed. Any confirmation request (phase or sub-phase sign-off, a design decision, a push or merge go-ahead), and the summary it rests on, is in full sentences.
+
+`skills-lock.json` lists only `rpa-bot-dev`, and that is deliberate: the SessionStart hook (`.claude/hooks/session-start.sh`, remote sessions only) runs `npx skills@latest experimental_install -y`, which restores into the gitignored `.agents/` folder (per the `.agents/` comment in `.gitignore`), never into `.claude/skills/`. The vendored skills above live only as their tracked copies in `.claude/skills/` and are unaffected by the hook. To update one, re-copy it from `skills-hub`.
+
+The `rpa-bot-dev` skill enforces a **phased process** (Discovery → High-Level Design → Medium-Level Design → Detailed Design → Full Review & Sign-off → Implementation Guide). Rules:
 - **Never skip phases.** Each phase must be confirmed by the user before moving to the next.
 - **No code or automation files until Phase 5 sign-off.** Everything before that is documentation.
 - Confirm **one sub-phase at a time** within Detailed Design — don't draft all 6 sub-phases and present them together.
@@ -148,6 +156,7 @@ These are conventions adopted in `concur-cash-advance-bot/docs/uipath-reference.
 | `PDD.md` | Process Definition Document — confirmed scope, trigger, steps, exceptions |
 | `high-level-design.md` | Phase 2 output — logical phases + phase-flow diagram (**authority** on the flow) |
 | `phase-flow.mmd` | Standalone copy of the high-level Mermaid, for rendering only. `high-level-design.md` wins if they disagree; regenerate whenever the flow changes. |
+| `diagrams/*.html` (optional) | Presentation renderings made with the `diagram-design` skill, for showing the design to people. Derived from the Mermaid in `high-level-design.md` / `medium-level-design.md`, which win if they disagree; each rendering names the doc it was drawn from. Regenerate whenever that flow changes. |
 | `medium-level-design.md` | Phase 3 output — purpose/scope, key steps, variables, error handling, flow diagrams per logical phase |
 | `detailed-design.md` | Phase 4 output — step-by-step activities (UiPath) or actions (PA Cloud), reviewed per sub-phase |
 | `uipath-reference.md` **or** `power-automate-reference.md` | Project constraints, standard patterns, unverified platform behaviors + Lessons Learned — **the rulebook**. Exactly one per project, matching its platform. |
