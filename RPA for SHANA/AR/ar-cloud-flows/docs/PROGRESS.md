@@ -34,26 +34,32 @@ supports it: every step is email, attachments, and AI Builder, and **no step dri
 the skill's UiPath test points to PA Cloud. It becomes settled when the user confirms the PDD, which
 records it with its rationale; update `CLAUDE.md`'s "provisional, pending PDD confirmation" wording in the same pass.
 
-**Governance checks — still to establish in Phase 1, because they change the design:**
+**Governance checks — to be settled before Phase 2, because they change the design (they do not block the PDD):**
 
 1. **Target environment** — must not be the Default environment (`CLAUDE.md` → PA Cloud tooling). As of
    the FlowAgent trial the tenant had only two environments: PTTEP (Default, ruled out) and SHANA AP
    (Dataverse for Teams, tied to a real Team). A new non-Default environment probably has to be created
-   (`flowagent-trial/test-plan.md`, "Blocker found at T0"). ⬜ Open.
+   (`flowagent-trial/test-plan.md`, "Blocker found at T0"). 🟡 **Conflict, awaiting the user (2026-10-14).**
+   The user answered that the flow "will be on PTTEP environment". PTTEP was the Default environment
+   as of the FlowAgent trial, which `CLAUDE.md` rules out. Two questions are put to the user: is PTTEP
+   still the Default environment; and if so, should a dedicated environment be requested from the
+   tenant admin (recommended by the assistant), or should PTTEP be used deliberately as a recorded
+   exception, with a pre-work inventory (`flowagent-trial/baseline-inventory.md` is the pattern) and the
+   flow built inside a Solution (`docs/power-automate-reference.md` R11)? Not a decision until answered.
 2. **Dataverse / Solution** — decides between environment variables and a config list or file
    (`docs/power-automate-reference.md` R5, R11, P2). Follows from item 1. ⬜ Open.
 3. **Tenant DLP policy** — Office 365 Outlook and AI Builder are expected to be allowed together. The
-   external-service fallback in `docs/power-automate-reference.md` P7 is not expected if Q14 confirms the
-   user's AI Builder test covered Thai, mixed and scanned samples; if it is needed, it brings its own DLP
-   and data-residency check. ⬜ Open.
+   external-service fallback in `docs/power-automate-reference.md` P7 is no longer expected, because the
+   user's AI Builder test covered every sample type (Q14); if it were ever needed, it would bring its own
+   DLP and data-residency check. ⬜ Open.
 4. **Licensing** — ✅ The user confirms AI Builder credits / Power Automate Premium are available (2026-10-12).
 
 Rulebook: `docs/power-automate-reference.md`, seeded 2026-10-12 from `templates/power-automate-reference.md`
 (template rules R1–R13 copied in directly; project rules start at `docs/power-automate-reference.md` R14). Checked jointly with the template.
 Project additions so far: **`docs/power-automate-reference.md` R14** (no run record, the exception to
 `docs/power-automate-reference.md` R10 that D7 decided), **P7–P10** (project-specific platform behaviours —
-P7 passed the user's own AI Builder test but stays ⚠️ until Q14 records its coverage; P8–P10 still
-unverified; each to settle before the design leans on it), and **L4** (what the P7 test taught).
+P7 is 🔬 user-reported for every sample type, with only the AI Builder approach still to record; P8–P10
+still unverified; each to settle before the design leans on it), and **L4** (what the P7 test taught).
 
 ## Confirmed decisions
 
@@ -124,8 +130,8 @@ which Phase 2 or 3 must decide.
 D8 proposed a bounded exception so that `docs/power-automate-reference.md` P7 (can AI Builder read Thai,
 English and scanned PDFs?) could be tested before Phase 6. Before it was approved, the user reported
 having tested AI Builder themselves: "I tested AI builder and it works. No concern on this." No
-exception was granted. P7 is largely answered by the user's reported test but stays ⚠️ until Q14 records the
-approach and sample coverage (see the rulebook's P7 and L4). The bounds are kept here
+exception was granted. On 2026-10-14 the user reported that the test covered every sample type and all
+passed, so P7 is now 🔬 user-reported; only the approach remains to record (Q14; see the rulebook's P7 and L4). The bounds are kept here
 as the shape any future pre-Phase-6 tenant test would need: a non-Default environment only, never PTTEP
 (Default), and never SHANA AP without the user's explicit say-so; throwaway artifacts that are not the
 build; an inventory before and after, then deletion (`flowagent-trial/baseline-inventory.md` is the
@@ -159,22 +165,26 @@ before every `docs/` commit — loop fix → re-review until PASS (zero BLOCKER/
 
 **Phase 1: Discovery — in progress.** The process, its trigger, outputs, exceptions, volume and run
 account are understood (Q1–Q9 and Q11 answered), and D2–D7 are confirmed (D3 delegated; D3–D6 carry
-design inferences to confirm with the PDD). AI Builder passed the user's own test; its exact coverage
-is Q14.
+design inferences to confirm with the PDD). AI Builder passed the user's own test on every sample type
+(2026-10-14); only the approach is still to record (Q14).
 
 **Blocking the PDD:**
 
-- **Q13 — the field list for each document type.** The user will provide it. It defines what "extract"
-  means and what the reply contains.
 - **D1 — one flow.** Proposed; confirm with the PDD.
 
-**Blocking the design, not the PDD:** the governance checks (Q10); which AI Builder approach the user's
-test used (Q14), because the design must use the tested one; and the unverified behaviours
-`docs/power-automate-reference.md` P8–P10.
+**Deferred, not blocking the PDD:** **Q13 — the field list for each document type.** The user deferred
+it on 2026-10-14 ("leave it for now. this can be discussed later, no effect on pdd"). The PDD names the
+two document types and says their fields are to be confirmed. The list must be settled before Phase 3
+(Medium-Level Design), because it defines the extraction output, the variables, and what the reply contains.
+When it is settled, re-confirm `docs/power-automate-reference.md` P7 against it: the user's AI Builder test covered only the fields they happened to try.
+
+**Blocking the design, not the PDD:** the governance checks (Q10), above all the environment conflict;
+which AI Builder approach to design for (Q14), because the design must use the tested one; and the
+unverified behaviours `docs/power-automate-reference.md` P8–P10.
 
 ## Phase status
 
-- [~] Phase 1 — Discovery (Q1–Q9, Q11 answered; Q12 proposed; D2–D7 confirmed; D8 closed; Q10, Q13, Q14, D1 open → `PDD.md`)
+- [~] Phase 1 — Discovery (Q1–Q9, Q11 answered; Q12 proposed; D2–D7 confirmed; D8 closed; Q13 deferred; Q10, Q14, D1 open → `PDD.md`)
 - [ ] Phase 2 — High-Level Design
 - [ ] Phase 3 — Medium-Level Design
 - [ ] Phase 4 — Detailed Design
@@ -194,8 +204,8 @@ test used (Q14), because the design must use the tested one; and the unverified 
 | Q7 | Exceptions? | Password-protected PDFs (D5). The flow's own reply re-entering the group (D6 loop guard). Further exceptions to be worked through in design. | ✅ |
 | Q8 | Volume? | About 40 emails a month per document type: up to about 80 emails and about 80 documents a month (fewer emails when one carries both types). | ✅ |
 | Q9 | Which account? | A service account (D6). | ✅ |
-| Q10 | Target environment, Dataverse, DLP, licensing? | Licensing confirmed. Environment, Dataverse and DLP still open (see Platform). | 🟡 Partial |
+| Q10 | Target environment, Dataverse, DLP, licensing? | Licensing confirmed. Environment: the user answered "will be on PTTEP environment" (2026-10-14), which conflicts with the never-Default rule if PTTEP is still the Default environment; follow-up questions put to the user (see Platform, item 1). Dataverse and DLP still open. | 🟡 Partial — environment conflict open |
 | Q11 | Delivery model — who builds and maintains it? | In-house. | ✅ |
 | Q12 | One flow or two? | One process, one trigger, so one flow (D1, proposed). | 🟡 Proposed — confirm with the PDD |
-| Q13 | Which fields are extracted from each document type? | To be confirmed by the user. | ⬜ Open — blocks the PDD |
-| Q14 | Which AI Builder approach did the user's test use (a prompt, or a document processing model), and on which kinds of sample (Thai, English, scanned, digital)? | The user reports the test worked; details not yet recorded. | ⬜ Open — blocks the design |
+| Q13 | Which fields are extracted from each document type? | Deferred by the user (2026-10-14): "leave it for now. this can be discussed later, no effect on pdd". | ⏸ Deferred — settle before Phase 3 |
+| Q14 | Which AI Builder approach did the user's test use (a prompt, or a document processing model), and on which kinds of sample (Thai, English, mixed, scanned, digital)? | Coverage (2026-10-14): "test all - pass all" — every sample type was tested and passed. Approach: asked again, not yet answered. | 🟡 Partial — approach open, blocks the design |

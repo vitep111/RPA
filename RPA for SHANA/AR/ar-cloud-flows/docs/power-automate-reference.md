@@ -9,17 +9,20 @@
 > A PA Cloud design is still checked jointly against `templates/power-automate-reference.md`. Rule
 > IDs are file-scoped (see "Rule IDs are file-scoped" below): cite `<file> R<n>`, never a bare ID across files.
 >
-> Apart from the additions listed below, the body is the template's text unchanged, so where it says "this template" read "the template
-> this file was copied from", and its "will renumber" note is satisfied by numbering project rules from R14.
+> Where the body says "this template", read "the template this file was copied from"; its "will renumber"
+> note is satisfied by numbering project rules from R14.
 >
-> **Project-specific additions so far** (all 2026-10-12, Discovery):
+> **Project-specific additions so far** (2026-10-12 unless dated otherwise, Discovery):
 >
 > - **R14** in section 1 ("Project rules") — no run record, a recorded exception to R10.
 > - **P7–P10** in section 3. They continue the template's P1–P6 numbering but are **project-scoped**: a
->   future template P7 is a different rule, so cite this file's by file name. P7 passed the user's own
->   test (user-reported), but stays ⚠️ until its approach and sample coverage are recorded; P8–P10
->   remain unverified.
+>   future template P7 is a different rule, so cite this file's by file name. P7 is 🔬 user-reported
+>   for every sample type (2026-10-14), with the AI Builder approach still to record; P8–P10 remain unverified.
 > - **L4** in section 5 — what the P7 test changed. L1–L3 are the template's.
+> - **🔬 user-reported** (2026-10-14) — a project-scoped qualified marker, used only on P7. It means a
+>   live test that the user ran and reported: binding for design, but its evidence is the user's
+>   statement, not an artifact held in the repo. It is weaker than the legend's 🔬, which needs evidence
+>   such as `flowagent-trial/test-plan.md`. The legend below is the template's and is left unchanged.
 >
 > Apart from this header block, the title's project suffix, and the additions listed above, everything
 > else below is the template's text, unchanged. Project status: see `PROGRESS.md`.
@@ -255,29 +258,36 @@ stop the flow before editing anything non-trivial.
 
 These come from this project's process, not from the template. Each one changes the design if it turns
 out false, so each needs settling before the design leans on it, not discovering at build time.
+P7 stays in this section, under the qualified marker **🔬 user-reported** defined in the header, so that
+its number does not change; it is not moved to section 2 and gets no V number.
 
-**P7 passed the user's own test** (2026-10-12), but how far that test reaches is not yet recorded — see
-P7 and L4. That was the user's own test, outside this project's process; it grants the assistant nothing. **None of P7–P10 may
+**P7 passed the user's own test** (2026-10-12) on every sample type (2026-10-14); only the approach the
+test used is not yet recorded — see P7 and L4. That was the user's own test, outside this project's process; it grants the assistant nothing. **None of P7–P10 may
 be tested in the tenant by the assistant** — including any test to confirm P7's coverage. `CLAUDE.md` ("PA Cloud tooling") keeps the tenant
 untouched until Phase 6, and a test artifact is a tenant artifact just as a flow is. A pre-Phase-6 test
 would need an explicit user-approved exception with bounds — the shape is in `PROGRESS.md` D8, now
 closed — and a non-Default environment (`docs/power-automate-reference.md` R11).
 
-**P7 — AI Builder can classify and extract from these PDFs.** ⚠️ **Passed the user's own test,
-2026-10-12 — scope not yet recorded.** The user reported: "I tested AI builder and it works. No concern
-on this." Not yet recorded: which AI Builder approach the test used, whether it covered classification
-as well as extraction, and which kinds of sample it covered (Thai, English, mixed, scanned, digital) —
-`PROGRESS.md` Q14. P7 stays ⚠️ until Q14 is answered; it becomes 🔬 for whatever the test is confirmed
-to have covered, and the design must use the approach that was tested. The risk: the documents are
-Thai, English, or mixed, and arrive as both digital PDFs and scans, and it is not established beyond
-the user's report that AI Builder reads Thai reliably or that one approach handles both scans and
-digital files. *Approaches, in the order to consider them:* (1) an AI Builder **prompt** that takes the PDF as input and returns the
+**P7 — AI Builder can classify and extract from these PDFs.** 🔬 **user-reported (header marker), every
+sample type (2026-10-14); approach not yet recorded.** The user first reported (2026-10-12): "I tested AI builder and
+it works. No concern on this." Asked which kinds of sample the test covered (Thai, English, mixed,
+scanned, digital), the user answered "test all - pass all" (2026-10-14). The marker rests on the user's
+report, not on a test this project ran or saw: no sample set or result is held in the repo. Still not recorded:
+which AI Builder approach the test used (`PROGRESS.md` Q14). The design must use the approach that was
+tested, so Q14 still blocks the design. ⚠️ Whether the test covered classification as well as extraction
+is assumed from "test all" and not stated; confirm it when the approach is recorded. *Fallback if
+classification was not tested:* a separate classification step, as in approach (2) below. Extraction is
+confirmed only for the fields the user happened to test: the field list (`PROGRESS.md` Q13) is deferred,
+so P7 must be re-confirmed against that list when Q13 is settled, before Phase 3. The original risk was that the documents are
+Thai, English, or mixed, and arrive as both digital PDFs and scans. *Approaches, in the order to consider them:* (1) an AI Builder **prompt** that takes the PDF as input and returns the
 document type plus the fields as JSON; (2) an AI Builder **document processing** custom model, one per
 document type, with a separate classification step. *Fallback if neither is good enough:* an external
 OCR/extraction service, reached through a custom connector or a connection reference that holds the
 credential, so no key appears in the flow definition (`docs/power-automate-reference.md` R6). It needs
-Premium, a DLP check and a data-residency check, so it is a recorded decision, not a silent swap. This
-fallback stays live until Q14 confirms the test covered Thai, mixed and scanned samples.
+Premium, a DLP check and a data-residency check, so it is a recorded decision, not a silent swap. With
+every sample type reported as passing, this fallback is no longer expected; it is kept in case a test
+during the build contradicts the user's result. The Phase 6 implementation guide must therefore include
+an AI Builder acceptance test on real samples of each kind.
 
 **P8 — The trigger can watch a Microsoft 365 group's mailbox.** `AccountReceivable@pttep.com` is a
 Microsoft 365 group, not a user or shared mailbox. The Office 365 Outlook shared-mailbox trigger is
@@ -389,7 +399,8 @@ client.
 addition, 2026-10-12). Discovery treated AI Builder on Thai and scanned PDFs (P7) as the risk most likely
 to change the design, and proposed a bounded pre-Phase-6 test exception (`PROGRESS.md` D8) to settle it.
 The user had already tested AI Builder and reported that it works. What was assumed: an open feasibility
-risk that nobody had tried. What is true: the user had tried it and it worked, though the approach and
-sample coverage are still to be recorded (`PROGRESS.md` Q14), so P7 stays ⚠️ until then. Ask what the
+risk that nobody had tried. What is true: the user had tried it on every sample type and all passed
+(coverage recorded 2026-10-14), so P7 is 🔬 user-reported; the approach is still to be recorded
+(`PROGRESS.md` Q14). Ask what the
 user has already tried before designing a test for it — and when they have, record exactly what it
 covered before treating the risk as closed.
