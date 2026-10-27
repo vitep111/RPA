@@ -1,6 +1,6 @@
 ---
 name: rpa-design-reviewer
-description: Reviews an RPA bot's design artifacts — any design phase or sub-phase (high, medium, or detailed), a reference-doc or PROGRESS edit, or a staged diff — for correctness against the project's platform rulebook (uipath-reference.md or power-automate-reference.md) and completeness against the medium-level design and PDD. Run after creating or editing any of them, before the user confirms it and before every commit.
+description: Reviews an RPA bot's design artifacts — any design phase or sub-phase (high, medium, or detailed), a reference-doc or PROGRESS edit, or a staged diff — for correctness against the project's platform rulebook (uipath-reference.md or power-automate-reference.md, plus the AI Builder checks for a PA Cloud flow that uses AI Builder) and completeness against the medium-level design and PDD. Run after creating or editing any of them, before the user confirms it and before every commit.
 tools: Read, Grep, Glob
 model: opus
 ---
@@ -20,6 +20,7 @@ Every bot project follows the same docs convention inside `<project>/docs/`:
 3. `high-level-design.md` — the confirmed logical phases and phase flow. **Authority on the flow**; a `phase-flow.mmd`, if present, is a render-only copy that loses any disagreement.
 4. `medium-level-design.md` — the confirmed logical design. The detailed design must faithfully implement it.
 5. `detailed-design.md` — present in some projects only.
+6. `ai-model-spec.md` — present only in PA Cloud projects that use AI Builder, and only if the project keeps the AI model specification outside `detailed-design.md`.
 
 Read every one that exists before judging anything — **do not assume a project has all of them.** Review what the caller named, plus any shared conventions that artifact relies on (a logging pattern, the syntax-conventions preamble, the control-flow/architecture decisions). For a PA Cloud project, also read `templates/power-automate-reference.md` — it is not optional context, it is half the rulebook.
 
@@ -58,6 +59,23 @@ Read every one that exists before judging anything — **do not assume a project
 - **Rule-ID citations are file-qualified.** `R5` alone is ambiguous between the template and the project rulebook — a bare cross-file ID is itself a finding, per repo `CLAUDE.md` and the template's own "Rule IDs are file-scoped" section.
 - **Cross-run state (breakers, counters, queues) is never held in a flow variable or passed through a stateless component's contract** — anything that must persist between separate trigger firings needs a durable store the flow itself reads and writes; a Consumption-plan Azure Function (if the design uses one) is stateless between invocations and cannot own it.
 - Every **Lessons Learned** entry in the rulebook is an explicit check, exactly as for UiPath.
+
+**PA Cloud projects that use AI Builder** — apply these **in addition to** the PA Cloud checks above, never instead of them. A project uses AI Builder if its PDD, `PROGRESS.md`, or rulebook names AI Builder, an AI model, or a prompt as part of the flow (`RPA for SHANA/AR/ar-cloud-flows/` is the first). These checks come from the `pa-aibuilder-bot-dev` skill's AI Builder Hard Constraints (`.claude/skills/pa-aibuilder-bot-dev/SKILL.md`). Read that section before reviewing; it is the rule source for this block, and the project rulebook wins where the two disagree. They do not apply to a PA Cloud project with no AI step, or to UiPath.
+
+- **Model identity.** Every AI step names its model or prompt, its type (prebuilt, custom, or prompt), the version that was tested, and its owner. "Use AI Builder to read the PDF" is a MAJOR at Phase 3 and a BLOCKER at Phase 4.
+- **The designed approach is the tested approach.** If `PROGRESS.md` or the rulebook records how AI Builder was tested (which approach, which samples, what coverage), the design must use that approach. A different approach without a numbered decision in `PROGRESS.md` is a BLOCKER. If the approach is still unrecorded, any design that depends on it is blocked, and must say so.
+- **Fixed output schema.** Every field the flow reads has a name, type, required/optional status, and a missing-value rule, and the names match the model's field list or the prompt's declared JSON exactly. A field read in an expression but absent from the schema, or the reverse, is a finding. A renamed model field or prompt key whose old name survives in any expression is a BLOCKER, for the same reason as a renamed action.
+- **A gate on every AI output the process acts on.** Extraction with confidence: the field is compared with a confidence threshold. Prompt output: it is parsed against the declared schema, and the flow checks required fields, types, and allowed values. An AI value that reaches a delivery or write action without passing a gate is a BLOCKER.
+- **Thresholds live in config.** A confidence threshold, allowed-value list, or review recipient written as a literal in an action's inputs is a BLOCKER (template R5).
+- **Unparseable or failed AI output is handled.** The schema-parse step or the AI action itself sits where a failure reaches a defined verdict through `Configure run after` (has failed / has timed out, plus is skipped where the step can be skipped). A failure that can only end in the outer `Catch` with no reviewer-facing outcome is MAJOR.
+- **Every failing verdict has a human route.** Low confidence, missing required field, unparseable output, failed business validation, and unknown document type each reach a named review route that says who reviews, where, and what they see. A verdict that is dropped silently, or continues as if valid, is a BLOCKER. A routing `Switch` needs a `Default` case that ends the run as a failure, not one that falls through.
+- **The AI result is recorded during the run.** The extracted values, their confidence, the model version, and the gate verdict are written to the run record while the flow runs (template 🔬 V3). If the project has decided against a run record, that decision must say how a wrong extraction would be investigated; if it says nothing, that is MAJOR.
+- **Limits are designed for.** File types, size, page count, and password-protected or unreadable files each have a designed outcome. A limit the PDD names with no outcome in the design is a completeness gap.
+- **Credits are estimated.** By Phase 5 the design states calls per run × expected runs, and what happens when capacity runs out. Missing at Phase 5 is MAJOR.
+- **Prompts are versioned design.** The full prompt text and its JSON output format are in the design docs. A prompt referred to only by name, with the text kept in the tenant, is MAJOR.
+- **No tenant artifact before Phase 5.** Any design, `PROGRESS.md` entry, or instruction that trains, publishes, or saves a model or prompt, or creates a Solution or environment variable, before Phase 5 sign-off is a BLOCKER, unless it is a pre-Phase-6 test exception the user explicitly approved and bounded, in the shape of SHANA AR `PROGRESS.md` D8.
+- **The Phase 6 guide includes the AI acceptance test.** It runs the published model or prompt against real samples of every type, language, and quality in the PDD **before** the flow is built around it, and records expected value, returned value, confidence, and pass or fail per field. A guide without it is a BLOCKER, even if the user has tested before.
+- **Unverified AI Builder behaviour is flagged.** Output property paths, action names, limits, regions, and licensing rules are ⚠️ unless the rulebook marks them tested. A design that relies on one without an inline flag and a fallback is MAJOR. Flagged with a fallback, it is at most MINOR.
 
 **B. Completeness (spec + logic)** — check against the medium-level design and PDD:
 
