@@ -410,7 +410,7 @@ If the `power-automate` plugin (FlowAgent MCP) is available, it can author and d
 
 ## Review loop
 
-Every phase, sub-phase, and design or rulebook edit goes through the `rpa-design-reviewer` agent before it is presented or committed, looping fix → re-review until PASS, exactly as `CLAUDE.md` requires. When prompting the reviewer for an AI Builder project, also ask it to check the AI Builder Hard Constraints above: model identity and version, fixed output schema, a gate on every AI output, a human route for every failing verdict, the AI result in the run record, config-held thresholds, limits and the credit estimate, and that the tested approach is the one designed.
+Every phase, sub-phase, and design or rulebook edit goes through the `rpa-design-reviewer` agent before it is presented or committed, looping fix → re-review until PASS, exactly as `CLAUDE.md` requires. The reviewer applies the AI Builder Hard Constraints above as its own block of checks for any PA Cloud project that uses AI Builder, so the caller doesn't need to list them. If you change those constraints here, update the reviewer's AI Builder block (`.claude/agents/rpa-design-reviewer.md`) in the same pass, so the two never disagree.
 
 ## What NOT to Do
 
